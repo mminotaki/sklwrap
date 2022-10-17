@@ -1,20 +1,17 @@
-from .data import *
-from .misc import apply_feat_mask
-from .vis import plot_errors, plot_energies
+import copy
+
 import numpy as np
-from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
-from sklearn.decomposition import PCA
+import pandas as pd
+import plotly.graph_objs as go
+from sklearn.linear_model import ElasticNet
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import KFold
 from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet
-from sklearn.svm import SVR
-import pandas as pd
-import copy
 from tqdm import trange
-from plotly.subplots import make_subplots
-import plotly.graph_objs as go
 
-
+from .data import *
+from .misc import apply_feat_mask
+from .vis import plot_energies, plot_errors
 
 
 def create_split(X, y, n_splits=5, split_select=0):
@@ -31,18 +28,31 @@ def create_split(X, y, n_splits=5, split_select=0):
     return X[train_index], X[test_index], y[train_index], y[test_index]
 
 
-def run_regr(df_in, ml_model, ml_features, ml_target, cv_type='kfold', n_splits=5):
+def run_regr(df_in, ml_model, ml_features, ml_target, cv_type="kfold", n_splits=5):
 
     # TODO: Remove and/or rename, as linear model not applicaple anymore. Generally, estimators that require data standardization.
 
     ml_models = []
     X_trains, X_tests, X_fulls = [], [], []
-    y_trains, y_tests, y_fulls, y_train_preds, y_test_preds, y_full_preds = [], [], [], [], [], []
-    m_trains, m_tests, m_fulls, l_trains, l_tests, l_fulls = [], [], [], [], [], [],
+    y_trains, y_tests, y_fulls, y_train_preds, y_test_preds, y_full_preds = (
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+    )
+    m_trains, m_tests, m_fulls, l_trains, l_tests, l_fulls = (
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+    )
     rmse_trains, rmse_tests, rmse_fulls = [], [], []
     mae_trains, mae_tests, mae_fulls = [], [], []
     rsquared_trains, rsquared_tests, rsquared_fulls = [], [], []
-
 
     # if isinstance(ml_model, Pipeline): # -> Maybe it'll work the same way, by just feeding a pipeline...
     #     print("Your ML model is a pipeline. I expect data standardization to be in the pipeline, if it is needed.")
@@ -50,7 +60,7 @@ def run_regr(df_in, ml_model, ml_features, ml_target, cv_type='kfold', n_splits=
     # Don't return DF here, as depending on KFold-split settings and LOOCV a different number of data distributions
     # will get evaluated.
 
-    if cv_type == 'kfold':
+    if cv_type == "kfold":
 
         # TODO: Verify why normal selection with square brackets doesn't work.
         # TODO: Also, this is not good code, as distinction between list and np.array is very shady to distinguish between a list of feature names, and actual values passed.
@@ -67,12 +77,17 @@ def run_regr(df_in, ml_model, ml_features, ml_target, cv_type='kfold', n_splits=
 
         for n_split in range(n_splits):
 
-            X_train, X_test, y_train, y_test = create_split(X=X, y=y, n_splits=n_splits, split_select=n_split)
+            X_train, X_test, y_train, y_test = create_split(
+                X=X, y=y, n_splits=n_splits, split_select=n_split
+            )
 
             # TODO: Generalize references to 'metal' columns.
-            m_train, m_test, l_train, l_test = create_split(X=np.array(df_in['metal'].to_list()),
-                                                            y=np.array(df_in['plot_label'].to_list()),
-                                                            n_splits=n_splits, split_select=n_split)
+            m_train, m_test, l_train, l_test = create_split(
+                X=np.array(df_in["metal"].to_list()),
+                y=np.array(df_in["plot_label"].to_list()),
+                n_splits=n_splits,
+                split_select=n_split,
+            )
 
             # Need to standardize data for linear models. Not necessary for RF.
             # TODO: Implement usage of a pipeline without the code breaking, for example for PCR. Scaler in pipeline? I'd say so, but haw can we retrieve the scaled data???
@@ -85,7 +100,9 @@ def run_regr(df_in, ml_model, ml_features, ml_target, cv_type='kfold', n_splits=
 
             # Fit and predict
             _ = ml_model.fit(X_train, y_train)
-            y_train_pred, y_test_pred = ml_model.predict(X_train), ml_model.predict(X_test)
+            y_train_pred, y_test_pred = ml_model.predict(X_train), ml_model.predict(
+                X_test
+            )
 
             # Re-concatenation instead of taking initial y again for the case of shuffling in train-test-split.
             X_full = np.concatenate([X_train, X_test])
@@ -139,14 +156,24 @@ def run_regr(df_in, ml_model, ml_features, ml_target, cv_type='kfold', n_splits=
 
         for group_val in df_in[cv_type].unique():
 
-            nom_df = df_in.loc[df_in[cv_type].isin([_ for _ in df_in[cv_type].unique() if _ != group_val])]
+            nom_df = df_in.loc[
+                df_in[cv_type].isin(
+                    [_ for _ in df_in[cv_type].unique() if _ != group_val]
+                )
+            ]
             m_df = df_in.loc[df_in[cv_type] == group_val]
 
-            X_train, X_test = nom_df[ml_features].to_numpy(), m_df[ml_features].to_numpy()
+            X_train, X_test = (
+                nom_df[ml_features].to_numpy(),
+                m_df[ml_features].to_numpy(),
+            )
             # y_train , y_test = nom_df[ml_target].to_numpy(), m_df[ml_target]
 
             if len(ml_target) == 1:
-                y_train, y_test = nom_df[ml_target].values.ravel(), m_df[ml_target].values.ravel()
+                y_train, y_test = (
+                    nom_df[ml_target].values.ravel(),
+                    m_df[ml_target].values.ravel(),
+                )
             elif len(ml_target) > 1:
                 y_train, y_test = nom_df[ml_target].values, m_df[ml_target].values
             else:
@@ -154,11 +181,14 @@ def run_regr(df_in, ml_model, ml_features, ml_target, cv_type='kfold', n_splits=
                 print(ml_target)
                 raise TypeError
 
-            X_train, X_test = X_train.astype('float32'), X_test.astype('float32')
-            y_train, y_test = y_train.astype('float32'), y_test.astype('float32')
+            X_train, X_test = X_train.astype("float32"), X_test.astype("float32")
+            y_train, y_test = y_train.astype("float32"), y_test.astype("float32")
 
             m_train, m_test = nom_df[cv_type].to_list(), m_df[cv_type].to_list()
-            l_train, l_test = nom_df['plot_label'].to_list(), m_df['plot_label'].to_list()
+            l_train, l_test = (
+                nom_df["plot_label"].to_list(),
+                m_df["plot_label"].to_list(),
+            )
 
             # Need to standardize data for linear models. Not necessary for RF.
             if isinstance(ml_model, NEED_TO_STANDARDIZE) is True:
@@ -169,7 +199,9 @@ def run_regr(df_in, ml_model, ml_features, ml_target, cv_type='kfold', n_splits=
 
             # Fit and predict
             _ = ml_model.fit(X_train, y_train)
-            y_train_pred, y_test_pred = ml_model.predict(X_train), ml_model.predict(X_test)
+            y_train_pred, y_test_pred = ml_model.predict(X_train), ml_model.predict(
+                X_test
+            )
 
             # Re-concatenation instead of taking initial y again for the case of shuffling in train-test-split.
             X_full = np.concatenate([X_train, X_test])
@@ -216,41 +248,55 @@ def run_regr(df_in, ml_model, ml_features, ml_target, cv_type='kfold', n_splits=
 
     # Here done with the cross-validation, just sort all data in the return-dictionary.
     result_dict = {
-        'X_trains': X_trains,
-        'X_tests': X_tests,
-        'X_fulls': X_fulls,
-        'y_trains': y_trains,
-        'y_tests': y_tests,
-        'y_fulls': y_fulls,
-        'y_train_preds': y_train_preds,
-        'y_test_preds': y_test_preds,
-        'y_full_preds': y_full_preds,
-        'm_trains': m_trains,
-        'm_tests': m_tests,
-        'm_fulls': m_fulls,
-        'l_trains': l_trains,
-        'l_tests': l_tests,
-        'l_fulls': l_fulls,
+        "X_trains": X_trains,
+        "X_tests": X_tests,
+        "X_fulls": X_fulls,
+        "y_trains": y_trains,
+        "y_tests": y_tests,
+        "y_fulls": y_fulls,
+        "y_train_preds": y_train_preds,
+        "y_test_preds": y_test_preds,
+        "y_full_preds": y_full_preds,
+        "m_trains": m_trains,
+        "m_tests": m_tests,
+        "m_fulls": m_fulls,
+        "l_trains": l_trains,
+        "l_tests": l_tests,
+        "l_fulls": l_fulls,
     }
 
     error_dict = {
-        'rmse_trains': rmse_trains,
-        'rmse_tests': rmse_tests,
-        'rmse_fulls': rmse_fulls,
-        'mae_trains': mae_trains,
-        'mae_tests': mae_tests,
-        'mae_fulls': mae_fulls,
-        'rsquared_trains': rsquared_trains,
-        'rsquared_tests': rsquared_tests,
-        'rsquared_fulls': rsquared_fulls,
+        "rmse_trains": rmse_trains,
+        "rmse_tests": rmse_tests,
+        "rmse_fulls": rmse_fulls,
+        "mae_trains": mae_trains,
+        "mae_tests": mae_tests,
+        "mae_fulls": mae_fulls,
+        "rsquared_trains": rsquared_trains,
+        "rsquared_tests": rsquared_tests,
+        "rsquared_fulls": rsquared_fulls,
     }
     best_id = np.argmin(rmse_tests)
 
-    return {'ml_models': ml_models, 'best_id': best_id, 'result_dict': result_dict, 'error_dict': error_dict}
+    return {
+        "ml_models": ml_models,
+        "best_id": best_id,
+        "result_dict": result_dict,
+        "error_dict": error_dict,
+    }
 
 
 # @timecall
-def vary_ml_param(df_in, ml_base_model, ml_features, ml_target, ml_param_dict, cv_type='kfold', n_splits=5, verbose=False,):
+def vary_ml_param(
+    df_in,
+    ml_base_model,
+    ml_features,
+    ml_target,
+    ml_param_dict,
+    cv_type="kfold",
+    n_splits=5,
+    verbose=False,
+):
 
     # Missing: Descriptor figure and number of features list/figure.
     return_dict = {}
@@ -277,15 +323,23 @@ def vary_ml_param(df_in, ml_base_model, ml_features, ml_target, ml_param_dict, c
 
         # print("Param: {:.6f}".format(ml_param_value))
 
-        ml_mod_model = copy.deepcopy(ml_base_model.set_params(**{list(ml_param_dict.keys())[0]: ml_param_value}))
+        ml_mod_model = copy.deepcopy(
+            ml_base_model.set_params(**{list(ml_param_dict.keys())[0]: ml_param_value})
+        )
         # print("ml_mod_model: {}".format(ml_mod_model))
 
-        ml_param_run = run_regr(df_in=df_in, ml_model=ml_mod_model, ml_features=ml_features, ml_target=ml_target,
-                                cv_type=cv_type, n_splits=n_splits)
+        ml_param_run = run_regr(
+            df_in=df_in,
+            ml_model=ml_mod_model,
+            ml_features=ml_features,
+            ml_target=ml_target,
+            cv_type=cv_type,
+            n_splits=n_splits,
+        )
 
-        ml_param_model = ml_param_run['ml_models'][ml_param_run['best_id']]
-        error_dict = ml_param_run['error_dict']
-        result_dict = ml_param_run['result_dict']
+        ml_param_model = ml_param_run["ml_models"][ml_param_run["best_id"]]
+        error_dict = ml_param_run["error_dict"]
+        result_dict = ml_param_run["result_dict"]
 
         ml_models.append(ml_param_model)
 
@@ -293,47 +347,69 @@ def vary_ml_param(df_in, ml_base_model, ml_features, ml_target, ml_param_dict, c
         for error_dict_key in list(error_dict.keys()):
             error_dict[error_dict_key] = [np.mean(error_dict[error_dict_key])]
 
-        test_rmses.append(error_dict['rmse_tests'][0])
+        test_rmses.append(error_dict["rmse_tests"][0])
 
-        errors_array[counter, :] = [error_dict_value[0] for error_dict_value in list(error_dict.values())]
+        errors_array[counter, :] = [
+            error_dict_value[0] for error_dict_value in list(error_dict.values())
+        ]
 
         counter += 1
 
     best_id = np.argmin(test_rmses)
 
-    return_dict['ml_models'] = ml_models
-    return_dict['best_id'] = best_id
-    return_dict['best_param'] = ml_param_range[best_id]
-    return_dict['test_rmses'] = test_rmses
+    return_dict["ml_models"] = ml_models
+    return_dict["best_id"] = best_id
+    return_dict["best_param"] = ml_param_range[best_id]
+    return_dict["test_rmses"] = test_rmses
 
     best_model = ml_models[best_id]
 
     if len(ml_param_range) == 1:
         best_model_run = ml_param_run
     else:
-        best_model_run = run_regr(df_in=df_in, ml_model=best_model, ml_features=ml_features, ml_target=ml_target,
-                                  cv_type=cv_type, n_splits=n_splits)
+        best_model_run = run_regr(
+            df_in=df_in,
+            ml_model=best_model,
+            ml_features=ml_features,
+            ml_target=ml_target,
+            cv_type=cv_type,
+            n_splits=n_splits,
+        )
 
     # Create energy plots
     # This could now also be done outside. Return just best model and plot the result of best model fit.
     # However, for convenience reasons do it here.
     # TODO: Generalize this to any column name that should be plotted...
 
-    ener_fig = plot_energies(result_dict=best_model_run['result_dict'],
-                                    error_dict=best_model_run['error_dict'],
-                                    )
+    ener_fig = plot_energies(
+        result_dict=best_model_run["result_dict"],
+        error_dict=best_model_run["error_dict"],
+    )
 
-    return_dict['ener_fig'] = ener_fig
+    return_dict["ener_fig"] = ener_fig
 
-    error_headers = [error_key.replace('_', 's_') for error_key in error_dict.keys()]
-    errors_dict = {key: value for key, value in zip(error_headers, errors_array.transpose())}
+    error_headers = [error_key.replace("_", "s_") for error_key in error_dict.keys()]
+    errors_dict = {
+        key: value for key, value in zip(error_headers, errors_array.transpose())
+    }
 
-    error_fig = plot_errors(error_dict=errors_dict, x_values=param_values,
-                            plot_measures=['rmses_trains', 'rmses_tests', 'rsquareds_trains', 'rsquareds_tests', 'maes_trains', 'maes_tests'],
-                            annot_text=['']*len(param_values), x_title=list(ml_param_dict.keys())[0])
+    error_fig = plot_errors(
+        error_dict=errors_dict,
+        x_values=param_values,
+        plot_measures=[
+            "rmses_trains",
+            "rmses_tests",
+            "rsquareds_trains",
+            "rsquareds_tests",
+            "maes_trains",
+            "maes_tests",
+        ],
+        annot_text=[""] * len(param_values),
+        x_title=list(ml_param_dict.keys())[0],
+    )
 
-    return_dict['error_fig'] = error_fig
-    return_dict['errors_dict'] = errors_dict
+    return_dict["error_fig"] = error_fig
+    return_dict["errors_dict"] = errors_dict
 
     # return_dict['numfeat_fig'] = numfeat_fig
 
@@ -341,7 +417,9 @@ def vary_ml_param(df_in, ml_base_model, ml_features, ml_target, ml_param_dict, c
 
 
 # @timecall
-def run_en_scan(en_df, en_features, en_target, en_alphas, en_l1_ratios, cv_type='kfold', n_splits=5):
+def run_en_scan(
+    en_df, en_features, en_target, en_alphas, en_l1_ratios, cv_type="kfold", n_splits=5
+):
 
     # If csv exists, read i, otherwise do scan.
     # l1_ratios lower than 0.1 significantly increase calculation time. Idk why. Try out pure ridge run for timing test.
@@ -352,28 +430,46 @@ def run_en_scan(en_df, en_features, en_target, en_alphas, en_l1_ratios, cv_type=
     for ien_alpha, en_alpha in enumerate(en_alphas):
         for ien_l1_ratio, en_l1_ratio in enumerate(en_l1_ratios):
 
-            en_run = run_regr(df_in=en_df, ml_features=en_features, ml_target=en_target,
-                            ml_model=ElasticNet(
-                                alpha=en_alpha, l1_ratio=en_l1_ratio,
-                                max_iter=int(float('1e5')), tol=float('1e-3'),
-                                random_state=0,
-                            ),
-                            cv_type=cv_type, n_splits=N_SPLITS,
-                            )
+            en_run = run_regr(
+                df_in=en_df,
+                ml_features=en_features,
+                ml_target=en_target,
+                ml_model=ElasticNet(
+                    alpha=en_alpha,
+                    l1_ratio=en_l1_ratio,
+                    max_iter=int(float("1e5")),
+                    tol=float("1e-3"),
+                    random_state=0,
+                ),
+                cv_type=cv_type,
+                n_splits=N_SPLITS,
+            )
 
-            selected_features = apply_feat_mask(model=en_run['ml_models'][np.argmin(en_run['error_dict']['rmse_tests'])],
-                                                model_features=en_features, feat_thresh=0)
+            selected_features = apply_feat_mask(
+                model=en_run["ml_models"][
+                    np.argmin(en_run["error_dict"]["rmse_tests"])
+                ],
+                model_features=en_features,
+                feat_thresh=0,
+            )
 
-            en_cv_best_rmse = np.min(en_run['error_dict']['rmse_tests'])
+            en_cv_best_rmse = np.min(en_run["error_dict"]["rmse_tests"])
 
             en_rmse_array[ien_l1_ratio, ien_alpha] = en_cv_best_rmse
 
             en_numfeat_array[ien_l1_ratio, ien_alpha] = len(selected_features)
 
-    numfeat_df = pd.DataFrame(data=en_numfeat_array).apply(pd.to_numeric, downcast='integer')
+    numfeat_df = pd.DataFrame(data=en_numfeat_array).apply(
+        pd.to_numeric, downcast="integer"
+    )
     rmse_df = pd.DataFrame(data=en_rmse_array)
 
-    return {'en_alphas': en_alphas, 'en_l1_ratios': en_l1_ratios, 'numfeat_df': numfeat_df, 'rmse_df': rmse_df}
+    return {
+        "en_alphas": en_alphas,
+        "en_l1_ratios": en_l1_ratios,
+        "numfeat_df": numfeat_df,
+        "rmse_df": rmse_df,
+    }
 
 
 def loocv_all_points(df_in, ml_model, ml_features, ml_target, column, plot_range):
@@ -384,11 +480,19 @@ def loocv_all_points(df_in, ml_model, ml_features, ml_target, column, plot_range
 
     for column_value in column_unique_vals:
 
-        train_df = df_in.loc[df_in[column].isin([_ for _ in column_unique_vals if _ != column_value])]
+        train_df = df_in.loc[
+            df_in[column].isin([_ for _ in column_unique_vals if _ != column_value])
+        ]
         test_df = df_in.loc[df_in[column] == column_value]
 
-        X_train, y_train = train_df[ml_features].to_numpy(), train_df[ml_target].values.ravel()
-        X_test, y_test = test_df[ml_features].to_numpy(), test_df[ml_target].values.ravel()
+        X_train, y_train = (
+            train_df[ml_features].to_numpy(),
+            train_df[ml_target].values.ravel(),
+        )
+        X_test, y_test = (
+            test_df[ml_features].to_numpy(),
+            test_df[ml_target].values.ravel(),
+        )
 
         if isinstance(ml_model, NEED_TO_STANDARDIZE) is True:
             train_scaler = StandardScaler().fit(X_train)
@@ -418,9 +522,17 @@ def loocv_all_points(df_in, ml_model, ml_features, ml_target, column, plot_range
             go.Scatter(
                 x=y_test,
                 y=y_pred,
-                text=test_df['plot_label'].tolist(),
-                mode='markers', marker=dict(size=8, symbol=0, color=color_dict.get(column_value, 'blue'), opacity=1),
-                hoverinfo='x+y+text', showlegend=True, name=column_value.title()
+                text=test_df["plot_label"].tolist(),
+                mode="markers",
+                marker=dict(
+                    size=8,
+                    symbol=0,
+                    color=color_dict.get(column_value, "blue"),
+                    opacity=1,
+                ),
+                hoverinfo="x+y+text",
+                showlegend=True,
+                name=column_value.title(),
             ),
         )
 
@@ -429,18 +541,28 @@ def loocv_all_points(df_in, ml_model, ml_features, ml_target, column, plot_range
             go.Scatter(
                 x=plot_range,
                 y=plot_range,
-                mode='lines', line=dict(color='rgb(0, 0, 0, 0.1)', width=2, dash='dash'), hoverinfo='skip', showlegend=False,
+                mode="lines",
+                line=dict(color="rgb(0, 0, 0, 0.1)", width=2, dash="dash"),
+                hoverinfo="skip",
+                showlegend=False,
             ),
         )
 
         _ = ener_fig.add_annotation(
-            xanchor='left', yanchor='top',
-            xref='paper', yref='paper',
-            x=0, y=1,
+            xanchor="left",
+            yanchor="top",
+            xref="paper",
+            yref="paper",
+            x=0,
+            y=1,
             align="left",
-            text="R<sup>2</sup> = {:.3f}<br>RMSE = {:.3f}<br>MAE = {:.3f}".format(rsquared, rmse, mae),
-            font_size=26, font_family="Arial", showarrow=False,
-            bgcolor='rgba(0,0,0,0.1)'
+            text="R<sup>2</sup> = {:.3f}<br>RMSE = {:.3f}<br>MAE = {:.3f}".format(
+                rsquared, rmse, mae
+            ),
+            font_size=26,
+            font_family="Arial",
+            showarrow=False,
+            bgcolor="rgba(0,0,0,0.1)",
         )
 
         _ = ener_fig.update_layout(energy_layout)
@@ -448,4 +570,9 @@ def loocv_all_points(df_in, ml_model, ml_features, ml_target, column, plot_range
         _ = ener_fig.update_layout(range_layout)
         ener_figs.append(ener_fig)
 
-    return {'ener_figs': ener_figs, 'rsquareds': rsquareds, 'rmses': rmses, 'maes': maes}
+    return {
+        "ener_figs": ener_figs,
+        "rsquareds": rsquareds,
+        "rmses": rmses,
+        "maes": maes,
+    }

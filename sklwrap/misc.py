@@ -1,26 +1,22 @@
-from .data import *
-import numpy as np
-import itertools as it
-from sklearn.metrics import mean_squared_error, mean_absolute_error
-import plotly.graph_objs as go
-import os
-from subprocess import check_output
-import matplotlib.pyplot as plt
-from pyRDTP import geomio
-import pandas as pd
-import numpy as np
 import argparse
 import itertools as it
-import math as m
 import json
-from plotly.offline import plot
-from plotly.utils import PlotlyJSONEncoder
+import math as m
+import os
+import pickle
+import re
+from subprocess import check_output
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 import plotly.graph_objs as go
 from pandas.io.formats.style import Styler
+from plotly.offline import download_plotlyjs, plot
+from plotly.utils import PlotlyJSONEncoder
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 
-from plotly.offline import download_plotlyjs
-import re
-import pickle
+from .data import *
 
 
 def apply_feat_mask(model, model_features, feat_thresh=0):
@@ -39,30 +35,50 @@ def apply_feat_mask(model, model_features, feat_thresh=0):
 
 
 def get_base_errors(df_in):
-    avg_metal = [np.mean(df_in['E_rel_metal'].values)] * df_in.shape[0]
-    avg_global = [np.mean(df_in['E_rel_global'].values)] * df_in.shape[0]
+    avg_metal = [np.mean(df_in["E_rel_metal"].values)] * df_in.shape[0]
+    avg_global = [np.mean(df_in["E_rel_global"].values)] * df_in.shape[0]
     avg_both = np.array([avg_metal, avg_global]).transpose()
 
-    base_rmse_metal = mean_squared_error(avg_metal, df_in['E_rel_metal'], squared=False)
-    base_rmse_global = mean_squared_error(avg_global, df_in['E_rel_global'], squared=False)
-    base_rmse_both = mean_squared_error(avg_both, df_in[['E_rel_metal', 'E_rel_global']].values, squared=False)
+    base_rmse_metal = mean_squared_error(avg_metal, df_in["E_rel_metal"], squared=False)
+    base_rmse_global = mean_squared_error(
+        avg_global, df_in["E_rel_global"], squared=False
+    )
+    base_rmse_both = mean_squared_error(
+        avg_both, df_in[["E_rel_metal", "E_rel_global"]].values, squared=False
+    )
 
-    base_mae_metal = mean_absolute_error(avg_metal, df_in['E_rel_metal'])
-    base_mae_global = mean_absolute_error(avg_global, df_in['E_rel_global'])
-    base_mae_both = mean_absolute_error(avg_both, df_in[['E_rel_metal', 'E_rel_global']].values)
+    base_mae_metal = mean_absolute_error(avg_metal, df_in["E_rel_metal"])
+    base_mae_global = mean_absolute_error(avg_global, df_in["E_rel_global"])
+    base_mae_both = mean_absolute_error(
+        avg_both, df_in[["E_rel_metal", "E_rel_global"]].values
+    )
 
     result_string = """
     RMSEs:\n
     Metal: {:.2f}, Global: {:.2f}, Both: {:.2f}\n
     MAEs:\n
     Metal: {:.2f}, Global: {:.2f}, Both: {:.2f}
-    """.format(base_rmse_metal, base_rmse_global, base_rmse_both, base_mae_metal, base_mae_global, base_mae_both)
+    """.format(
+        base_rmse_metal,
+        base_rmse_global,
+        base_rmse_both,
+        base_mae_metal,
+        base_mae_global,
+        base_mae_both,
+    )
 
     return result_string
 
 
-def get_prim_feat(ml_model, ml_features, prim_features,
-                  mask_thresh=0, measure='coeff', sort_dict=True, create_fig=True) -> dict:
+def get_prim_feat(
+    ml_model,
+    ml_features,
+    prim_features,
+    mask_thresh=0,
+    measure="coeff",
+    sort_dict=True,
+    create_fig=True,
+) -> dict:
     """"""
     """
     Function to decompose 2D features into primary ones and create histogram, either of counts or coefficients.
@@ -75,16 +91,23 @@ def get_prim_feat(ml_model, ml_features, prim_features,
     :return:
     """
 
-    return_dict = {'selected_combi': None, 'numfeats': None, 'feat_dict': None, 'feat_fig': None}
+    return_dict = {
+        "selected_combi": None,
+        "numfeats": None,
+        "feat_dict": None,
+        "feat_fig": None,
+    }
 
-    selected_features = apply_feat_mask(model=ml_model, model_features=ml_features, feat_thresh=mask_thresh)
-    return_dict['selected_combi'] = selected_features
+    selected_features = apply_feat_mask(
+        model=ml_model, model_features=ml_features, feat_thresh=mask_thresh
+    )
+    return_dict["selected_combi"] = selected_features
 
     prim_feat_dict = dict.fromkeys(prim_features, 0)
 
-    return_dict['numfeats'] = len(selected_features)
+    return_dict["numfeats"] = len(selected_features)
 
-    if measure == 'coeff':
+    if measure == "coeff":
         # Negative coefficients indicate an inverse relationship but should not be a couse for a concern. Sum up
         try:
             coefs = np.abs(ml_model.coef_)
@@ -96,13 +119,13 @@ def get_prim_feat(ml_model, ml_features, prim_features,
 
         for iml_feature, ml_feature in enumerate(ml_features):
 
-            if ' * ' in ml_feature:
-                feat_split = [ml_feature.split(' * ')[0], ml_feature.split(' * ')[1]]
+            if " * " in ml_feature:
+                feat_split = [ml_feature.split(" * ")[0], ml_feature.split(" * ")[1]]
                 prim_feat_dict[feat_split[0]] += coefs[iml_feature] / 2
                 prim_feat_dict[feat_split[1]] += coefs[iml_feature] / 2
 
-            elif ' / ' in ml_feature:
-                feat_split = [ml_feature.split(' / ')[0], ml_feature.split(' / ')[1]]
+            elif " / " in ml_feature:
+                feat_split = [ml_feature.split(" / ")[0], ml_feature.split(" / ")[1]]
                 prim_feat_dict[feat_split[0]] += coefs[iml_feature] / 2
                 prim_feat_dict[feat_split[1]] += coefs[iml_feature] / 2
 
@@ -110,14 +133,16 @@ def get_prim_feat(ml_model, ml_features, prim_features,
                 prim_feat_dict[ml_feature] += coefs[iml_feature]
 
     else:
-        selected_feature_string = '-'.join(selected_features)
+        selected_feature_string = "-".join(selected_features)
         for prim_feature in prim_features:
             prim_feat_dict[prim_feature] = selected_feature_string.count(prim_feature)
 
     if sort_dict is True:
-        prim_feat_dict = dict(sorted(prim_feat_dict.items(), key=lambda item: item[1], reverse=True))
+        prim_feat_dict = dict(
+            sorted(prim_feat_dict.items(), key=lambda item: item[1], reverse=True)
+        )
 
-    return_dict['feat_dict'] = prim_feat_dict
+    return_dict["feat_dict"] = prim_feat_dict
 
     if create_fig is True:
         feat_fig = go.Figure()
@@ -125,10 +150,14 @@ def get_prim_feat(ml_model, ml_features, prim_features,
             go.Bar(
                 x=list(prim_feat_dict.keys()),
                 y=list(prim_feat_dict.values()),
-                text=['{:.3f}'.format(val) for val in list(prim_feat_dict.values())],
-                textposition='none',  # textposition='inside',
+                text=["{:.3f}".format(val) for val in list(prim_feat_dict.values())],
+                textposition="none",  # textposition='inside',
                 # textfont=dict(size=28, family='Arial', color='black'),
-                insidetextfont=dict(size=20, family='Arial', color='black', ),
+                insidetextfont=dict(
+                    size=20,
+                    family="Arial",
+                    color="black",
+                ),
                 # outsidetextfont=dict(size=20, family='Arial', color='black', ),
                 showlegend=False,
             ),
@@ -151,30 +180,59 @@ def get_prim_feat(ml_model, ml_features, prim_features,
         # )
 
         feat_layout = go.Layout(
-            width=809, height=500,
-            font=dict(family='Arial', color='black'),
-            margin=dict(l=0, r=0, b=0, t=0, ),
-            hoverlabel={'namelength': -1},
+            width=809,
+            height=500,
+            font=dict(family="Arial", color="black"),
+            margin=dict(
+                l=0,
+                r=0,
+                b=0,
+                t=0,
+            ),
+            hoverlabel={"namelength": -1},
             # title=dict(text=plot_title, x=0.5, ),
-            paper_bgcolor='white', plot_bgcolor='white',
+            paper_bgcolor="white",
+            plot_bgcolor="white",
             xaxis=dict(
-                title='Primary Feature', title_font_size=22,
-                showline=True, linewidth=3, linecolor='black', mirror=True,
-                showgrid=False, zeroline=False, gridcolor='rgba(0,0,0,0.3)',
-                ticks='outside', tickfont_size=14, tickformat=".1f", tickwidth=3, ticklen=6),
+                title="Primary Feature",
+                title_font_size=22,
+                showline=True,
+                linewidth=3,
+                linecolor="black",
+                mirror=True,
+                showgrid=False,
+                zeroline=False,
+                gridcolor="rgba(0,0,0,0.3)",
+                ticks="outside",
+                tickfont_size=14,
+                tickformat=".1f",
+                tickwidth=3,
+                ticklen=6,
+            ),
             yaxis=dict(
                 # title='E<sub>pred</sub> / eV', title_font_size=30, range=y_range_ext,
                 # showline=True, linewidth=3, linecolor='black', mirror=True,
                 # showgrid=False, zeroline=False, gridcolor='rgba(0,0,0,0.3)',
                 # ticks='outside', tickfont_size=26, tickformat=".1f", tickwidth=3, ticklen=6),
-                title=measure.title(), title_font_size=30,
-                showline=True, linewidth=3, linecolor='black', mirror=True,
-                showgrid=False, zeroline=False, gridcolor='rgba(0,0,0,0.3)',
-                ticks='outside', tickfont_size=26, tickformat=".1f", tickwidth=3, ticklen=6),
+                title=measure.title(),
+                title_font_size=30,
+                showline=True,
+                linewidth=3,
+                linecolor="black",
+                mirror=True,
+                showgrid=False,
+                zeroline=False,
+                gridcolor="rgba(0,0,0,0.3)",
+                ticks="outside",
+                tickfont_size=26,
+                tickformat=".1f",
+                tickwidth=3,
+                ticklen=6,
+            ),
         )
 
         _ = feat_fig.update_layout(feat_layout)
-        return_dict['feat_fig'] = feat_fig
+        return_dict["feat_fig"] = feat_fig
 
     return return_dict
 
@@ -185,7 +243,7 @@ def per_atom_multiply(itable):
 
 # Previous `own_utils.py`
 def set_figsize(width, fraction=1):
-    """ Set aesthetic figure dimensions to avoid scaling in latex.
+    """Set aesthetic figure dimensions to avoid scaling in latex.
     Obtained from https://jwalton.info/Embed-Publication-Matplotlib-Latex/
     Parameters
     ----------
@@ -206,7 +264,7 @@ def set_figsize(width, fraction=1):
     inches_per_pt = 1 / 72.27
 
     # Golden ratio to set aesthetic figure height
-    golden_ratio = (5 ** .5 - 1) / 2
+    golden_ratio = (5**0.5 - 1) / 2
 
     # Figure width in inches
     fig_width_in = fig_width_pt * inches_per_pt
@@ -239,7 +297,7 @@ def del_file(pfile):
         pass
 
 
-def get_metal(poscar_file='POSCAR'):
+def get_metal(poscar_file="POSCAR"):
     """
     Function to retrieve name of the metal from the POSCAR file.
     :param poscar_file: Name of POSCAR. Can be used to specify different path.
@@ -253,27 +311,37 @@ def get_metal(poscar_file='POSCAR'):
         return None
 
 
-def read_incar(incar_file='INCAR'):
+def read_incar(incar_file="INCAR"):
     """
     Function to parse incar file into dictionary containing relevant options for MD-run. Keys are all in lowercase.
     :param incar_file: Name of INCAR. Can be used to specify different path.
     :return: Dict wih md-relevant parameters from INCAR file.
     """
-    incar_dict = {"tebeg": None, "teend": None, "potim": None, "nsw": None, "nelm": None}
+    incar_dict = {
+        "tebeg": None,
+        "teend": None,
+        "potim": None,
+        "nsw": None,
+        "nelm": None,
+    }
     with open(incar_file, "r") as INCAR:
         incar = INCAR.readlines()[1:]
         for line in incar:
             for prop in incar_dict.keys():
-                if prop in line.lower().split('#')[0]:
+                if prop in line.lower().split("#")[0]:
                     try:
-                        incar_dict[prop] = int(line.strip('\n').split(' = ')[1])
+                        incar_dict[prop] = int(line.strip("\n").split(" = ")[1])
 
                     # Exception handling for TEBEG = X; TEEND = Y. Separated by semicolon.
                     except ValueError:
                         if prop == "tebeg":
-                            incar_dict[prop] = int(line.strip('\n').split(';')[0].split(' = ')[1])
+                            incar_dict[prop] = int(
+                                line.strip("\n").split(";")[0].split(" = ")[1]
+                            )
                         elif prop == "teend":
-                            incar_dict[prop] = int(line.strip('\n').split(';')[1].split(' = ')[1])
+                            incar_dict[prop] = int(
+                                line.strip("\n").split(";")[1].split(" = ")[1]
+                            )
 
     if incar_dict["teend"] is None:
         incar_dict["teend"] = incar_dict["tebeg"]
@@ -292,13 +360,13 @@ def id_to_linetype(id_in):
     :return: Linetype for Pyplot.
     """
     if id_in in [13, 14, 15, 16, 49]:  # Surface Ce
-        line_type = '-'
+        line_type = "-"
     elif id_in in [9, 10, 11, 12]:  # subsurface Ce
-        line_type = '--'
+        line_type = "--"
     elif id_in in [5, 6, 7, 8]:  # subsubsurface Ce
-        line_type = '-.'
+        line_type = "-."
     else:  # Other Ce
-        line_type = ':'
+        line_type = ":"
 
     return line_type
 
@@ -310,9 +378,17 @@ def id_to_color(id_in):
     :param id_in: ID of atom.
     :return: Linetype for Pyplot.
     """
-    color_dict = {13: "b", 14: "g", 15: "r", 16: "m",
-                  9: "tab:blue", 10: "tab:green", 11: "tab:red", 12: "tab:pink",
-                  49: "k"}
+    color_dict = {
+        13: "b",
+        14: "g",
+        15: "r",
+        16: "m",
+        9: "tab:blue",
+        10: "tab:green",
+        11: "tab:red",
+        12: "tab:pink",
+        49: "k",
+    }
     try:
         return color_dict[id_in]
     except KeyError:
@@ -327,12 +403,12 @@ def str2bool(str_in):
     """
     if isinstance(str_in, bool):
         return str_in
-    if str_in.lower() in ('yes', 'true', 't', 'y', '1'):
+    if str_in.lower() in ("yes", "true", "t", "y", "1"):
         return True
-    elif str_in.lower() in ('no', 'false', 'f', 'n', '0'):
+    elif str_in.lower() in ("no", "false", "f", "n", "0"):
         return False
     else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
+        raise argparse.ArgumentTypeError("Boolean value expected.")
 
 
 def create_atom_dict():
@@ -340,8 +416,10 @@ def create_atom_dict():
     Function to read a POSCAR file and return dictionary with atomt types and numbers.
     :return: Dictionary with atom type as key and number of atom as value.
     """
-    atom_dict = {key: get_one_line("POSCAR", 7).decode().split()[i] for i, key in
-                 enumerate(get_one_line("POSCAR", 6).decode().split())}
+    atom_dict = {
+        key: get_one_line("POSCAR", 7).decode().split()[i]
+        for i, key in enumerate(get_one_line("POSCAR", 6).decode().split())
+    }
 
     return atom_dict
 
@@ -358,22 +436,32 @@ def create_datfile_dict(to_read, mdir=None):
     if mdir == "co":
         mdir = "cob"
 
-    with open(to_read + ".dat", 'r') as dat_file:
+    with open(to_read + ".dat", "r") as dat_file:
 
         if to_read in ["ener", "ewal", "ext_pres"]:
-            out_dict = {fline.rstrip('\n').split(mdir)[-1].split()[0]: fline.rstrip('\n').split()[1] for fline in
-                        dat_file if
-                        len(fline.rstrip('\n').split()) == 2 and abs(float(fline.rstrip('\n').split()[1])) > 0.001}
+            out_dict = {
+                fline.rstrip("\n")
+                .split(mdir)[-1]
+                .split()[0]: fline.rstrip("\n")
+                .split()[1]
+                for fline in dat_file
+                if len(fline.rstrip("\n").split()) == 2
+                and abs(float(fline.rstrip("\n").split()[1])) > 0.001
+            }
 
         elif to_read in ["mag", "chg"]:
-            out_dict = {m_line.rstrip('\n').split(mdir)[-1]: [] for m_line in dat_file if len(m_line) > 30}
+            out_dict = {
+                m_line.rstrip("\n").split(mdir)[-1]: []
+                for m_line in dat_file
+                if len(m_line) > 30
+            }
             dat_file.seek(0)
             for m_line in dat_file:
                 if len(m_line) > 30:
-                    calc_dir = m_line.strip('\n').split(mdir)[-1]
+                    calc_dir = m_line.strip("\n").split(mdir)[-1]
                 else:
                     try:
-                        out_dict[calc_dir].append(float(m_line.strip('\n').split()[-1]))
+                        out_dict[calc_dir].append(float(m_line.strip("\n").split()[-1]))
                     except KeyError:
                         continue
     return out_dict
@@ -402,37 +490,6 @@ def header_select(atom_sel):
     return head_str
 
 
-def create_dist_dict(curr_dir=os.getcwd()):
-    """
-    Function that takes a CONTCAR file in a specified directory and calculates all distances of the single metal atom \
-    adsorbed on ceria to the surface and subsurface oxygen/cerium atoms.
-    :param curr_dir: Directory in which the structure to consider resides.
-    :return: Returns a dictionary with the headers from the 'header_select' function as keys and the distances as values
-    """
-    mol = geomio.file_to_mol("." + curr_dir + "/CONTCAR", 'contcar')
-    metal_atom = mol.atoms[-1]
-
-    metal_dist_keys = ["-".join(["M", atom_type]) for atom_type in ["O_s", "Ce_s", "Ce_sub", "O_sub"]]
-    metal_dist_dict = {metal_dist_key: [] for metal_dist_key in metal_dist_keys}
-
-    for i2, atom2 in enumerate(mol):
-        if all(atom2.freeze) and not atom2.element == metal_atom.element:
-            head_str2 = header_select(atom2)
-            if head_str2 is not None:
-                dict_key = "-".join(["M", head_str2])
-                metal_dist_dict[dict_key].append((i2 + 1, mol.distance(-1, i2, minimum=True)))
-
-    # Check if classification to surface and subsurface species correct.
-    for i in metal_dist_dict.keys():
-        if len(metal_dist_dict[i]) not in (9, 18):
-            print("PROBLEM WITH STRUCTURE FROM: ", curr_dir)
-            exit(1)
-        else:
-            metal_dist_dict[i] = sorted(metal_dist_dict[i])
-
-    return metal_dist_dict
-
-
 def regex_remove_df(df_in, regex_remove=None):
     """
     Little helper function that allows to remove columns through matching of substrings.
@@ -457,49 +514,6 @@ def get_nce3(df_in: pd.DataFrame, thresh: int = 0.8) -> int:
     print(nce3)
 
     return nce3
-
-
-def get_dists(target_dir, to_csv=True):
-    """
-    Creates Dataframe with atomic distances from CONTCAR.
-    :param target_dir: Directory where CONTCAR is located.
-    :return: Dataframe with one row per atom containg distances to all non-frozen atoms. Sorted by IDs.
-    """
-    if target_dir:
-        target_dir += '/'
-
-    try:
-        mol = geomio.file_to_mol(target_dir + "CONTCAR", 'contcar')
-        contcar = True
-
-    except FileNotFoundError:
-        mol = geomio.file_to_mol(target_dir + "POSCAR", 'contcar')
-        contcar = False
-
-    headers = ['d-' + '_'.join([atom.element, str(atom_id+1)]) for atom_id, atom in enumerate(mol) if all(atom.freeze)]
-    headers = headers[:-1] + ['d-M_109']
-
-    dist_arr = np.zeros([len(mol), len(headers)])
-    coord_arr = np.zeros([len(mol), 3])
-
-    if contcar is False:
-        return pd.DataFrame(data=np.nan, index=range(len(mol)), columns=headers)
-
-    for atom1_id, atom1 in enumerate(mol):
-        coord_arr[atom1_id,:] = atom1.coords
-        np_id = 0
-        for atom2 in mol:
-            if all(atom2.freeze):
-                dist_arr[atom1_id, np_id] = mol.distance(atom1, atom2, minimum=True, obj=True)
-                np_id += 1
-
-    dist_df = pd.DataFrame(data=dist_arr, index=range(len(mol)), columns=headers)
-    dist_df['x'], dist_df['y'], dist_df['z'] = coord_arr[:, 0], coord_arr[:, 1], coord_arr[:, 2]
-
-    if to_csv is True:
-        dist_df.to_csv(sep=';', index=False, path_or_buf='dist.csv')
-
-    return dist_df
 
 
 def list_consec(iter_in, threshold=2):
@@ -535,7 +549,7 @@ def list_consec(iter_in, threshold=2):
     return outdict
 
 
-def md_to_df(direc=os.getcwd(), write_csv=False, fname='md_df.csv'):
+def md_to_df(direc=os.getcwd(), write_csv=False, fname="md_df.csv"):
     """
     Creates a pandas dataframe containing atomic coordinates and magnetisations for each step of an MD run in the
     respective directory.
@@ -545,21 +559,30 @@ def md_to_df(direc=os.getcwd(), write_csv=False, fname='md_df.csv'):
     @return: Returns dataframe.
     """
 
-    if not direc[-1] == '/':
-        direc += '/'
+    if not direc[-1] == "/":
+        direc += "/"
 
     # Read md_mag.out to list
-    with open(direc + 'md_mag.out') as md_mag:
-        mag_lines = [line.rstrip('\n') for line in md_mag.readlines()]
+    with open(direc + "md_mag.out") as md_mag:
+        mag_lines = [line.rstrip("\n") for line in md_mag.readlines()]
 
     # Read XDATCAR to list
-    with open(direc + 'XDATCAR') as xdat:
-        xdat_lines = [line.rstrip('\n') for line in xdat.readlines()]
+    with open(direc + "XDATCAR") as xdat:
+        xdat_lines = [line.rstrip("\n") for line in xdat.readlines()]
 
     # Get number of steps and atom information from input
-    nsteps = len([xdat_line for xdat_line in xdat_lines if 'configuration' in xdat_line])
-    atom_types = xdat_lines[xdat_lines.index('Direct configuration= 1', 0, 50) - 2].split()
-    atom_numbers = list(map(int, xdat_lines[xdat_lines.index('Direct configuration= 1', 0, 50) - 1].split()))
+    nsteps = len(
+        [xdat_line for xdat_line in xdat_lines if "configuration" in xdat_line]
+    )
+    atom_types = xdat_lines[
+        xdat_lines.index("Direct configuration= 1", 0, 50) - 2
+    ].split()
+    atom_numbers = list(
+        map(
+            int,
+            xdat_lines[xdat_lines.index("Direct configuration= 1", 0, 50) - 1].split(),
+        )
+    )
     natoms = sum(atom_numbers)
     atom_list = []
     for iatom_type, atom_type in enumerate(atom_types):
@@ -575,8 +598,8 @@ def md_to_df(direc=os.getcwd(), write_csv=False, fname='md_df.csv'):
     # Go over XDATCAR and array with atomic coordinates
     md_step = -1
     atom_id = 0
-    for line in xdat_lines[xdat_lines[:50].index('Direct configuration= 1'):]:
-        if 'configuration' not in line:
+    for line in xdat_lines[xdat_lines[:50].index("Direct configuration= 1") :]:
+        if "configuration" not in line:
             for xyz in range(3):
                 df_data[md_step, atom_id + xyz] = float(line.split()[xyz])
             atom_id += 4
@@ -587,25 +610,27 @@ def md_to_df(direc=os.getcwd(), write_csv=False, fname='md_df.csv'):
     # Go over md_mag and fill array with magnetizations
     md_step = -1
     for line in mag_lines:
-        if 'magnetization' not in line:
-            df_data[md_step, 4 * int(line.split()[0]) - 1] = np.abs(float(line.split()[-1]))
+        if "magnetization" not in line:
+            df_data[md_step, 4 * int(line.split()[0]) - 1] = np.abs(
+                float(line.split()[-1])
+            )
         else:
             md_step += 1
 
     # Create column names
     columns = []
     for i, atom in enumerate(atom_list):
-        temp = '_'.join([atom, str(i)])
-        for j in 'xyzm':
-            columns.append('-'.join([j, temp]))
+        temp = "_".join([atom, str(i)])
+        for j in "xyzm":
+            columns.append("-".join([j, temp]))
 
     # Create df with all data
     df_out = pd.DataFrame(columns=columns, data=df_data)
-    df_out.index.name = 'step'
+    df_out.index.name = "step"
 
     # Return
     if write_csv:
-        df_out.to_csv(direc + fname, sep=';')
+        df_out.to_csv(direc + fname, sep=";")
 
     return df_out
 
@@ -660,10 +685,10 @@ def plotlyfig2json(fig, fpath=None):
     redata = json.loads(json.dumps(fig.data, cls=PlotlyJSONEncoder))
     relayout = json.loads(json.dumps(fig.layout, cls=PlotlyJSONEncoder))
 
-    fig_json=json.dumps({'data': redata,'layout': relayout})
+    fig_json = json.dumps({"data": redata, "layout": relayout})
 
     if fpath:
-        with open(fpath, 'w') as f:
+        with open(fpath, "w") as f:
             f.write(fig_json)
     else:
         return fig_json
@@ -671,35 +696,35 @@ def plotlyfig2json(fig, fpath=None):
 
 def plotlyfromjson(fpath):
     """Render a plotly figure from a json file"""
-    with open(fpath, 'r') as f:
+    with open(fpath, "r") as f:
         v = json.loads(f.read())
 
-    fig = go.Figure(data=v['data'], layout=v['layout'])
+    fig = go.Figure(data=v["data"], layout=v["layout"])
 
     return fig
 
 
 def l1(predict, reference):
     try:
-        return np.mean([abs(x-y) for x, y in zip(predict, reference)])
+        return np.mean([abs(x - y) for x, y in zip(predict, reference)])
     except TypeError:
-        print('Error: both entries must be 1-D lists of the same length')
+        print("Error: both entries must be 1-D lists of the same length")
 
 
 def l2(predict, reference):
     try:
-        return m.sqrt(np.mean([(x-y)**2 for x, y in zip(predict, reference)]))
+        return m.sqrt(np.mean([(x - y) ** 2 for x, y in zip(predict, reference)]))
     except TypeError:
-        print('Error: both entries must be 1-D lists of the same length')
+        print("Error: both entries must be 1-D lists of the same length")
 
 
-def write_to_html_file(df, title='', filename='out.html'):
+def write_to_html_file(df, title="", filename="out.html"):
     """
     Write an entire dataframe to an HTML file with nice formatting.
     https://stackoverflow.com/questions/47704441/applying-styling-to-pandas-dataframe-saved-to-html-file
     """
 
-    result = '''
+    result = """
 <html>
 <head>
 <style>
@@ -732,15 +757,15 @@ def write_to_html_file(df, title='', filename='out.html'):
 </style>
 </head>
 <body>
-    '''
-    result += '<h2> %s </h2>\n' % title
+    """
+    result += "<h2> %s </h2>\n" % title
     if type(df) == Styler:
         result += df.render()
     else:
-        result += df.to_html(classes='wide', escape=False)
-    result += '''
+        result += df.to_html(classes="wide", escape=False)
+    result += """
 </body>
 </html>
-'''
-    with open(filename, 'w') as f:
+"""
+    with open(filename, "w") as f:
         f.write(result)

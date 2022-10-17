@@ -1,12 +1,14 @@
-from .data import *
+import copy
+import itertools as it
+import math
 import os
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objs as go
-import itertools as it
-import math
 from plotly.subplots import make_subplots
-import copy
+
+from .data import *
 
 # Own code
 
@@ -508,7 +510,9 @@ def plot_energies(
     return ener_fig
 
 
-def plot_errors(error_dict, x_values, plot_measures, annot_text, x_title, showlegend=True):
+def plot_errors(
+    error_dict, x_values, plot_measures, annot_text, x_title, showlegend=True
+):
     """
     Plot RMSE (train and test) and R^2 for ML model from the result of varying a parameter.
     """
