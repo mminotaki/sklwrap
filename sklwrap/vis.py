@@ -284,7 +284,10 @@ def plot_energies(
                         y=metal_train_df["y_pred"],
                         mode="markers",
                         marker=dict(
-                            size=8, symbol=0, opacity=1, color=color_dict[_column_value]
+                            size=8,
+                            symbol=0,
+                            opacity=1,
+                            color=color_dict.get(_column_value, "blue"),
                         ),
                         hoverinfo="text+x+y",
                         name=_column_value,
@@ -322,7 +325,7 @@ def plot_energies(
                             size=11,
                             symbol="x",
                             opacity=1,
-                            color=color_dict[_column_value],
+                            color=color_dict.get(_column_value, "blue"),
                             line=dict(
                                 width=0.5,
                                 color="rgba(255, 255, 255, 0.5)",
@@ -361,9 +364,7 @@ def plot_energies(
                         x=metal_train_df["y_calc"],
                         y=metal_train_df["y_pred"],
                         mode="markers",
-                        marker=dict(
-                            size=8, symbol=0, opacity=1
-                        ),  # color=color_dict[metal],
+                        marker=dict(size=8, symbol=0, opacity=1),
                         hoverinfo="text+x+y",
                         name=_column_value,
                         text=train_plot_text,
@@ -399,7 +400,7 @@ def plot_energies(
                         marker=dict(
                             size=11,
                             symbol="x",
-                            opacity=1,  # color=color_dict[metal],
+                            opacity=1,
                             line=dict(
                                 width=0.5,
                                 color="rgba(255, 255, 255, 0.5)",

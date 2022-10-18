@@ -28,10 +28,16 @@ def create_split(X, y, n_splits=5, split_select=0):
     return X[train_index], X[test_index], y[train_index], y[test_index]
 
 
-def run_regr(df_in, ml_model, ml_features, ml_target, cv_type="kfold", n_splits=5):
-
-    # TODO: Remove and/or rename, as linear model not applicaple anymore. Generally, estimators that require data standardization.
-
+def run_regr(
+    df_in,
+    ml_model,
+    ml_features,
+    ml_target,
+    cv_type="kfold",
+    n_splits=5,
+    color_dict=None,
+):
+    df_func = df_in.copy(deep=True)
     ml_models = []
     X_trains, X_tests, X_fulls = [], [], []
     y_trains, y_tests, y_fulls, y_train_preds, y_test_preds, y_full_preds = (
@@ -54,7 +60,7 @@ def run_regr(df_in, ml_model, ml_features, ml_target, cv_type="kfold", n_splits=
     mae_trains, mae_tests, mae_fulls = [], [], []
     rsquared_trains, rsquared_tests, rsquared_fulls = [], [], []
 
-    # if isinstance(ml_model, Pipeline): # -> Maybe it'll work the same way, by just feeding a pipeline...
+    # if isinstance(ml_model, Pipeline): # -> TODO: Maybe it'll work the same way, by just feeding a pipeline...
     #     print("Your ML model is a pipeline. I expect data standardization to be in the pipeline, if it is needed.")
 
     # Don't return DF here, as depending on KFold-split settings and LOOCV a different number of data distributions
@@ -81,13 +87,22 @@ def run_regr(df_in, ml_model, ml_features, ml_target, cv_type="kfold", n_splits=
                 X=X, y=y, n_splits=n_splits, split_select=n_split
             )
 
-            # TODO: Generalize references to 'metal' columns.
-            m_train, m_test, l_train, l_test = create_split(
-                X=np.array(df_in["metal"].to_list()),
-                y=np.array(df_in["plot_label"].to_list()),
-                n_splits=n_splits,
-                split_select=n_split,
-            )
+            # TODO: Generalize references to 'metal' columns
+            # ! Hacky "solution" using try except.
+            try:
+                m_train, m_test, l_train, l_test = create_split(
+                    X=np.array(df_in["metal"].to_list()),
+                    y=np.array(df_in["plot_label"].to_list()),
+                    n_splits=n_splits,
+                    split_select=n_split,
+                )
+            except KeyError:
+                m_train, m_test, l_train, l_test = create_split(
+                    X=np.array(["_" for _ in range(df_in.shape[0])]),
+                    y=np.array(["_" for _ in range(df_in.shape[0])]),
+                    n_splits=n_splits,
+                    split_select=n_split,
+                )
 
             # Need to standardize data for linear models. Not necessary for RF.
             # TODO: Implement usage of a pipeline without the code breaking, for example for PCR. Scaler in pipeline? I'd say so, but haw can we retrieve the scaled data???
