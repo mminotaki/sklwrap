@@ -10,8 +10,6 @@ from plotly.subplots import make_subplots
 
 from .data import *
 
-# Own code
-
 
 def plotly_to_image(
     plotly_fig: go.Figure,
@@ -91,424 +89,426 @@ def plotly_to_image(
     return None
 
 
-def plot_energies(
-    result_dict,
-    error_dict,
-    show_train=True,
-    show_test=True,
-    set_range=None,
-    column="metal",
-    cv_id=None,
-    which_error="mean",
-    showticklabels=True,
-    showlegend=True,
-):
-    # Include threshold for deviation somewhere
-    # TODO: When doing LOOCV, the excluded metal (group) is not added to the legend.
-    # TODO: Add possibility to provide specific colors. Had to remove that from the metal-color dict so that the code works general.
-    try:
-        if cv_id is None:
-            cv_id = np.argmin(error_dict["rmse_tests"])
+# def plot_regr(
+#     result_dict,
+#     error_dict,
+#     show_train=True,
+#     show_test=True,
+#     set_range=None,
+#     column="metal",
+#     cv_id=None,
+#     which_error="mean",
+#     showticklabels=True,
+#     showlegend=True,
+# ):
+#     # Include threshold for deviation somewhere
+#     # TODO: When doing LOOCV, the excluded metal (group) is not added to the legend.
+#     # TODO: Add possibility to provide specific colors. Had to remove that from the metal-color dict so that the code works general.
+#     try:
+#         if cv_id is None:
+#             cv_id = np.argmin(error_dict["rmse_tests"])
 
-        train_df = pd.DataFrame(
-            {
-                column: result_dict["m_trains"][cv_id],
-                "plot_label": result_dict["l_trains"][cv_id],
-                "y_calc": result_dict["y_trains"][cv_id],
-                "y_pred": result_dict["y_train_preds"][cv_id],
-            }
-        )
+#         train_df = pd.DataFrame(
+#             {
+#                 column: result_dict["m_trains"][cv_id],
+#                 "plot_label": result_dict["l_trains"][cv_id],
+#                 "y_calc": result_dict["y_trains"][cv_id],
+#                 "y_pred": result_dict["y_train_preds"][cv_id],
+#             }
+#         )
 
-        test_df = pd.DataFrame(
-            {
-                column: result_dict["m_tests"][cv_id],
-                "plot_label": result_dict["l_tests"][cv_id],
-                "y_calc": result_dict["y_tests"][cv_id],
-                "y_pred": result_dict["y_test_preds"][cv_id],
-            }
-        )
+#         test_df = pd.DataFrame(
+#             {
+#                 column: result_dict["m_tests"][cv_id],
+#                 "plot_label": result_dict["l_tests"][cv_id],
+#                 "y_calc": result_dict["y_tests"][cv_id],
+#                 "y_pred": result_dict["y_test_preds"][cv_id],
+#             }
+#         )
 
-    except IndexError:
-        # Tried to create df with metal and label before and then add y_calc and y_pred with if, but assignment of new
-        # columns gives ValueError due to supposed different length (1) of passed array to new df-column
-        train_df = pd.DataFrame(
-            {
-                column: result_dict["m_trains"][cv_id],
-                "plot_label": result_dict["l_trains"][cv_id],
-                "y_calc": result_dict["y_trains"][cv_id],
-                "y_pred": result_dict["y_train_preds"][cv_id],
-            }
-        )
+#     except IndexError:
+#         # Tried to create df with metal and label before and then add y_calc and y_pred with if, but assignment of new
+#         # columns gives ValueError due to supposed different length (1) of passed array to new df-column
+#         train_df = pd.DataFrame(
+#             {
+#                 column: result_dict["m_trains"][cv_id],
+#                 "plot_label": result_dict["l_trains"][cv_id],
+#                 "y_calc": result_dict["y_trains"][cv_id],
+#                 "y_pred": result_dict["y_train_preds"][cv_id],
+#             }
+#         )
 
-        test_df = pd.DataFrame(
-            {
-                column: result_dict["m_tests"][cv_id],
-                "plot_label": result_dict["l_tests"][cv_id],
-                "y_calc": result_dict["y_tests"][cv_id],
-                "y_pred": result_dict["y_test_preds"][cv_id],
-            }
-        )
+#         test_df = pd.DataFrame(
+#             {
+#                 column: result_dict["m_tests"][cv_id],
+#                 "plot_label": result_dict["l_tests"][cv_id],
+#                 "y_calc": result_dict["y_tests"][cv_id],
+#                 "y_pred": result_dict["y_test_preds"][cv_id],
+#             }
+#         )
 
-    # TODO: is this really needed? Could just remove so that column_value is not a required input.
-    # if column_value is not None:
-    #     train_df = train_df.loc[train_df[column] == column_value]
-    #     test_df = test_df.loc[test_df[column] == column_value]
+#     # TODO: is this really needed? Could just remove so that column_value is not a required input.
+#     # if column_value is not None:
+#     #     train_df = train_df.loc[train_df[column] == column_value]
+#     #     test_df = test_df.loc[test_df[column] == column_value]
 
-    # Plot energies
-    ener_fig = go.Figure()
+#     # Plot energies
+#     ener_fig = go.Figure()
 
-    # Add annotation with R^2 and RMSEs
-    if which_error == "mean":
-        _ = ener_fig.add_annotation(
-            xanchor="left",
-            yanchor="top",
-            xref="paper",
-            yref="paper",
-            x=0,
-            y=1,
-            align="left",
-            text="R<sup>2</sup> = {:.3f} &#177; {:.3f}<br>RMSE = {:.3f} &#177; {:.3f}<br>MAE = {:.3f} &#177; {:.3f}".format(
-                np.mean(error_dict["rsquared_tests"]),
-                np.std(error_dict["rsquared_tests"]),
-                np.mean(error_dict["rmse_tests"]),
-                np.std(error_dict["rmse_tests"]),
-                np.mean(error_dict["mae_tests"]),
-                np.std(error_dict["mae_tests"]),
-            ),
-            font_size=26,
-            font_family="Arial",
-            showarrow=False,
-            bgcolor="rgba(0,0,0,0.1)",
-        )
-    elif which_error == "best":
-        _ = ener_fig.add_annotation(
-            xanchor="left",
-            yanchor="top",
-            xref="paper",
-            yref="paper",
-            x=0,
-            y=1,
-            align="left",
-            text="R<sup>2</sup> = {:.3f} &#177; {:.3f}<br>RMSE = {:.3f} &#177; {:.3f}<br>MAE = {:.3f} &#177; {:.3f}".format(
-                np.max(error_dict["rsquared_tests"]),
-                np.std(error_dict["rsquared_tests"]),
-                np.min(error_dict["rmse_tests"]),
-                np.std(error_dict["rmse_tests"]),
-                np.min(error_dict["mae_tests"]),
-                np.std(error_dict["mae_tests"]),
-            ),
-            font_size=26,
-            font_family="Arial",
-            showarrow=False,
-            bgcolor="rgba(0,0,0,0.1)",
-        )
+#     # Add annotation with R^2 and RMSEs
+#     # TODO: Implement this better
+#     if which_error == "mean":
+#         _ = ener_fig.add_annotation(
+#             xanchor="left",
+#             yanchor="top",
+#             xref="paper",
+#             yref="paper",
+#             x=0,
+#             y=1,
+#             align="left",
+#             text="R<sup>2</sup> = {:.3f} &#177; {:.3f}<br>RMSE = {:.3f} &#177; {:.3f}<br>MAE = {:.3f} &#177; {:.3f}".format(
+#                 np.mean(error_dict["rsquared_tests"]),
+#                 np.std(error_dict["rsquared_tests"]),
+#                 np.mean(error_dict["rmse_tests"]),
+#                 np.std(error_dict["rmse_tests"]),
+#                 np.mean(error_dict["mae_tests"]),
+#                 np.std(error_dict["mae_tests"]),
+#             ),
+#             font_size=26,
+#             font_family="Arial",
+#             showarrow=False,
+#             bgcolor="rgba(0,0,0,0.1)",
+#         )
 
-    # TODO: Implement this better
-    elif which_error == "full_mean":
-        _ = ener_fig.add_annotation(
-            xanchor="left",
-            yanchor="top",
-            xref="paper",
-            yref="paper",
-            x=0,
-            y=1,
-            align="left",
-            text="R<sup>2</sup> = {:.3f} &#177; {:.3f}<br>RMSE = {:.3f} &#177; {:.3f}<br>MAE = {:.3f} &#177; {:.3f}".format(
-                np.mean(error_dict["rsquared_fulls"]),
-                np.std(error_dict["rsquared_fulls"]),
-                np.mean(error_dict["rmse_fulls"]),
-                np.std(error_dict["rmse_fulls"]),
-                np.mean(error_dict["mae_fulls"]),
-                np.std(error_dict["mae_fulls"]),
-            ),
-            font_size=26,
-            font_family="Arial",
-            showarrow=False,
-            bgcolor="rgba(0,0,0,0.1)",
-        )
+#     elif which_error == "best":
+#         _ = ener_fig.add_annotation(
+#             xanchor="left",
+#             yanchor="top",
+#             xref="paper",
+#             yref="paper",
+#             x=0,
+#             y=1,
+#             align="left",
+#             text="R<sup>2</sup> = {:.3f} &#177; {:.3f}<br>RMSE = {:.3f} &#177; {:.3f}<br>MAE = {:.3f} &#177; {:.3f}".format(
+#                 np.max(error_dict["rsquared_tests"]),
+#                 np.std(error_dict["rsquared_tests"]),
+#                 np.min(error_dict["rmse_tests"]),
+#                 np.std(error_dict["rmse_tests"]),
+#                 np.min(error_dict["mae_tests"]),
+#                 np.std(error_dict["mae_tests"]),
+#             ),
+#             font_size=26,
+#             font_family="Arial",
+#             showarrow=False,
+#             bgcolor="rgba(0,0,0,0.1)",
+#         )
 
-    elif which_error == "full_best":
-        _ = ener_fig.add_annotation(
-            xanchor="left",
-            yanchor="top",
-            xref="paper",
-            yref="paper",
-            x=0,
-            y=1,
-            align="left",
-            text="R<sup>2</sup> = {:.3f} &#177; {:.3f}<br>RMSE = {:.3f} &#177; {:.3f}<br>MAE = {:.3f} &#177; {:.3f}".format(
-                np.max(error_dict["rsquared_fulls"]),
-                np.std(error_dict["rsquared_fulls"]),
-                np.min(error_dict["rmse_fulls"]),
-                np.std(error_dict["rmse_fulls"]),
-                np.min(error_dict["mae_fulls"]),
-                np.std(error_dict["mae_fulls"]),
-            ),
-            font_size=26,
-            font_family="Arial",
-            showarrow=False,
-            bgcolor="rgba(0,0,0,0.1)",
-        )
-    else:
-        raise ValueError("Invalid error specification used.")
+#     elif which_error == "full_mean":
+#         _ = ener_fig.add_annotation(
+#             xanchor="left",
+#             yanchor="top",
+#             xref="paper",
+#             yref="paper",
+#             x=0,
+#             y=1,
+#             align="left",
+#             text="R<sup>2</sup> = {:.3f} &#177; {:.3f}<br>RMSE = {:.3f} &#177; {:.3f}<br>MAE = {:.3f} &#177; {:.3f}".format(
+#                 np.mean(error_dict["rsquared_fulls"]),
+#                 np.std(error_dict["rsquared_fulls"]),
+#                 np.mean(error_dict["rmse_fulls"]),
+#                 np.std(error_dict["rmse_fulls"]),
+#                 np.mean(error_dict["mae_fulls"]),
+#                 np.std(error_dict["mae_fulls"]),
+#             ),
+#             font_size=26,
+#             font_family="Arial",
+#             showarrow=False,
+#             bgcolor="rgba(0,0,0,0.1)",
+#         )
 
-    # TODO: Add here general functionality to provide color dict or not. Just hackish solution by copy-pasting all the code.
-    if column == "metal":
-        # Plot energy data points
-        test_legend = True
-        if show_train is True:
-            test_legend = False
-            for _column_value in train_df[column].unique():
-                # Add trace for training data
-                metal_train_df = train_df.loc[train_df[column] == _column_value]
+#     elif which_error == "full_best":
+#         _ = ener_fig.add_annotation(
+#             xanchor="left",
+#             yanchor="top",
+#             xref="paper",
+#             yref="paper",
+#             x=0,
+#             y=1,
+#             align="left",
+#             text="R<sup>2</sup> = {:.3f} &#177; {:.3f}<br>RMSE = {:.3f} &#177; {:.3f}<br>MAE = {:.3f} &#177; {:.3f}".format(
+#                 np.max(error_dict["rsquared_fulls"]),
+#                 np.std(error_dict["rsquared_fulls"]),
+#                 np.min(error_dict["rmse_fulls"]),
+#                 np.std(error_dict["rmse_fulls"]),
+#                 np.min(error_dict["mae_fulls"]),
+#                 np.std(error_dict["mae_fulls"]),
+#             ),
+#             font_size=26,
+#             font_family="Arial",
+#             showarrow=False,
+#             bgcolor="rgba(0,0,0,0.1)",
+#         )
 
-                # TODO: Added this print as concatenation of the plot label and deviation as follows did not work due to str and bytes data type.
-                # for i, j in zip(metal_train_df['plot_label'].to_list(), ['<br>Deviation: {}eV'.format(round(dev, 3)) for dev in np.abs(metal_train_df['y_calc'] - metal_train_df['y_pred'])]):
-                #     print(i, j)
+#     else:
+#         raise ValueError("Invalid error specification used.")
 
-                train_plot_text = [
-                    i + j
-                    for i, j in zip(
-                        metal_train_df["plot_label"].to_list(),
-                        [
-                            "<br>Deviation: {}eV".format(round(dev, 3))
-                            for dev in np.abs(
-                                metal_train_df["y_calc"] - metal_train_df["y_pred"]
-                            )
-                        ],
-                    )
-                ]
-                _ = ener_fig.add_trace(
-                    go.Scatter(
-                        x=metal_train_df["y_calc"],
-                        y=metal_train_df["y_pred"],
-                        mode="markers",
-                        marker=dict(
-                            size=8,
-                            symbol=0,
-                            opacity=1,
-                            color=color_dict.get(_column_value, "blue"),
-                        ),
-                        hoverinfo="text+x+y",
-                        name=_column_value,
-                        text=train_plot_text,
-                        legendgroup=_column_value,
-                        showlegend=showlegend,
-                    ),
-                )
+#     # TODO: Add here general functionality to provide color dict or not. Just hackish solution by copy-pasting all the code.
+#     if column == "metal":
+#         # Plot energy data points
+#         test_legend = True
+#         if show_train is True:
+#             test_legend = False
+#             for _column_value in train_df[column].unique():
+#                 # Add trace for training data
+#                 metal_train_df = train_df.loc[train_df[column] == _column_value]
 
-        if show_test is True:
-            # Add testing data in second loop so that it is on top
-            for _column_value in test_df[column].unique():
-                # Add trace for testing data
-                metal_test_df = test_df.loc[test_df[column] == _column_value]
+#                 # TODO: Added this print as concatenation of the plot label and deviation as follows did not work due to str and bytes data type.
+#                 # for i, j in zip(metal_train_df['plot_label'].to_list(), ['<br>Deviation: {}eV'.format(round(dev, 3)) for dev in np.abs(metal_train_df['y_calc'] - metal_train_df['y_pred'])]):
+#                 #     print(i, j)
 
-                test_plot_text = [
-                    i + j
-                    for i, j in zip(
-                        metal_test_df["plot_label"].to_list(),
-                        [
-                            "<br>Deviation: {}eV".format(round(dev, 3))
-                            for dev in np.abs(
-                                metal_test_df["y_calc"] - metal_test_df["y_pred"]
-                            )
-                        ],
-                    )
-                ]
+#                 train_plot_text = [
+#                     i + j
+#                     for i, j in zip(
+#                         metal_train_df["plot_label"].to_list(),
+#                         [
+#                             "<br>Deviation: {}eV".format(round(dev, 3))
+#                             for dev in np.abs(
+#                                 metal_train_df["y_calc"] - metal_train_df["y_pred"]
+#                             )
+#                         ],
+#                     )
+#                 ]
+#                 _ = ener_fig.add_trace(
+#                     go.Scatter(
+#                         x=metal_train_df["y_calc"],
+#                         y=metal_train_df["y_pred"],
+#                         mode="markers",
+#                         marker=dict(
+#                             size=8,
+#                             symbol=0,
+#                             opacity=1,
+#                             color=color_dict.get(_column_value, "blue"),
+#                         ),
+#                         hoverinfo="text+x+y",
+#                         name=_column_value,
+#                         text=train_plot_text,
+#                         legendgroup=_column_value,
+#                         showlegend=showlegend,
+#                     ),
+#                 )
 
-                _ = ener_fig.add_trace(
-                    go.Scatter(
-                        x=metal_test_df["y_calc"],
-                        y=metal_test_df["y_pred"],
-                        mode="markers",
-                        marker=dict(
-                            size=11,
-                            symbol="x",
-                            opacity=1,
-                            color=color_dict.get(_column_value, "blue"),
-                            line=dict(
-                                width=0.5,
-                                color="rgba(255, 255, 255, 0.5)",
-                            ),
-                        ),
-                        hoverinfo="text+x+y",
-                        name=_column_value,
-                        text=test_plot_text,
-                        legendgroup=_column_value,
-                        showlegend=test_legend & showlegend,
-                    ),
-                )
-    else:
-        # Plot energy data points
-        test_legend = True
-        if show_train is True:
-            test_legend = False
-            for _column_value in train_df[column].unique():
-                # Add trace for training data
-                metal_train_df = train_df.loc[train_df[column] == _column_value]
+#         if show_test is True:
+#             # Add testing data in second loop so that it is on top
+#             for _column_value in test_df[column].unique():
+#                 # Add trace for testing data
+#                 metal_test_df = test_df.loc[test_df[column] == _column_value]
 
-                train_plot_text = [
-                    i + j
-                    for i, j in zip(
-                        metal_train_df["plot_label"].to_list(),
-                        [
-                            "<br>Deviation: {}eV".format(round(dev, 3))
-                            for dev in np.abs(
-                                metal_train_df["y_calc"] - metal_train_df["y_pred"]
-                            )
-                        ],
-                    )
-                ]
-                _ = ener_fig.add_trace(
-                    go.Scatter(
-                        x=metal_train_df["y_calc"],
-                        y=metal_train_df["y_pred"],
-                        mode="markers",
-                        marker=dict(size=8, symbol=0, opacity=1),
-                        hoverinfo="text+x+y",
-                        name=_column_value,
-                        text=train_plot_text,
-                        legendgroup=_column_value,
-                        showlegend=showlegend,
-                    ),
-                )
+#                 test_plot_text = [
+#                     i + j
+#                     for i, j in zip(
+#                         metal_test_df["plot_label"].to_list(),
+#                         [
+#                             "<br>Deviation: {}eV".format(round(dev, 3))
+#                             for dev in np.abs(
+#                                 metal_test_df["y_calc"] - metal_test_df["y_pred"]
+#                             )
+#                         ],
+#                     )
+#                 ]
 
-        if show_test is True:
-            # Add testing data in second loop so that it is on top
-            for _column_value in test_df[column].unique():
-                # Add trace for testing data
-                metal_test_df = test_df.loc[test_df[column] == _column_value]
+#                 _ = ener_fig.add_trace(
+#                     go.Scatter(
+#                         x=metal_test_df["y_calc"],
+#                         y=metal_test_df["y_pred"],
+#                         mode="markers",
+#                         marker=dict(
+#                             size=11,
+#                             symbol="x",
+#                             opacity=1,
+#                             color=color_dict.get(_column_value, "blue"),
+#                             line=dict(
+#                                 width=0.5,
+#                                 color="rgba(255, 255, 255, 0.5)",
+#                             ),
+#                         ),
+#                         hoverinfo="text+x+y",
+#                         name=_column_value,
+#                         text=test_plot_text,
+#                         legendgroup=_column_value,
+#                         showlegend=test_legend & showlegend,
+#                     ),
+#                 )
+#     else:
+#         # Plot energy data points
+#         test_legend = True
+#         if show_train is True:
+#             test_legend = False
+#             for _column_value in train_df[column].unique():
+#                 # Add trace for training data
+#                 metal_train_df = train_df.loc[train_df[column] == _column_value]
 
-                test_plot_text = [
-                    i + j
-                    for i, j in zip(
-                        metal_test_df["plot_label"].to_list(),
-                        [
-                            "<br>Deviation: {}eV".format(round(dev, 3))
-                            for dev in np.abs(
-                                metal_test_df["y_calc"] - metal_test_df["y_pred"]
-                            )
-                        ],
-                    )
-                ]
+#                 train_plot_text = [
+#                     i + j
+#                     for i, j in zip(
+#                         metal_train_df["plot_label"].to_list(),
+#                         [
+#                             "<br>Deviation: {}eV".format(round(dev, 3))
+#                             for dev in np.abs(
+#                                 metal_train_df["y_calc"] - metal_train_df["y_pred"]
+#                             )
+#                         ],
+#                     )
+#                 ]
+#                 _ = ener_fig.add_trace(
+#                     go.Scatter(
+#                         x=metal_train_df["y_calc"],
+#                         y=metal_train_df["y_pred"],
+#                         mode="markers",
+#                         marker=dict(size=8, symbol=0, opacity=1),
+#                         hoverinfo="text+x+y",
+#                         name=_column_value,
+#                         text=train_plot_text,
+#                         legendgroup=_column_value,
+#                         showlegend=showlegend,
+#                     ),
+#                 )
 
-                _ = ener_fig.add_trace(
-                    go.Scatter(
-                        x=metal_test_df["y_calc"],
-                        y=metal_test_df["y_pred"],
-                        mode="markers",
-                        marker=dict(
-                            size=11,
-                            symbol="x",
-                            opacity=1,
-                            line=dict(
-                                width=0.5,
-                                color="rgba(255, 255, 255, 0.5)",
-                            ),
-                        ),
-                        hoverinfo="text+x+y",
-                        name=_column_value,
-                        text=test_plot_text,
-                        legendgroup=_column_value,
-                        showlegend=test_legend,
-                    ),
-                )
+#         if show_test is True:
+#             # Add testing data in second loop so that it is on top
+#             for _column_value in test_df[column].unique():
+#                 # Add trace for testing data
+#                 metal_test_df = test_df.loc[test_df[column] == _column_value]
 
-    # # fig_for_range = ener_fig.full_figure_for_development(warn=False)
-    # # x_range = fig_for_range.layout.xaxis.range
-    # # y_range = fig_for_range.layout.xaxis.range
-    # big_range = [min(x_range+y_range), max(x_range+y_range)]
-    all_values = (
-        train_df["y_calc"].tolist()
-        + train_df["y_pred"].tolist()
-        + test_df["y_calc"].tolist()
-        + test_df["y_pred"].tolist()
-    )
-    full_range = [min(all_values), max(all_values)]
-    range_ext = (
-        full_range[0] - 0.075 * np.ptp(full_range),
-        full_range[1] + 0.075 * np.ptp(full_range),
-    )
-    # x_range_ext = (x_range[0] - 0.075*np.ptp(x_range), x_range[1] + 0.075*np.ptp(x_range))
-    # y_range_ext = (y_range[0] - 0.075*np.ptp(y_range), y_range[1] + 0.075*np.ptp(y_range))
-    if set_range is not None:
-        range_ext = set_range
+#                 test_plot_text = [
+#                     i + j
+#                     for i, j in zip(
+#                         metal_test_df["plot_label"].to_list(),
+#                         [
+#                             "<br>Deviation: {}eV".format(round(dev, 3))
+#                             for dev in np.abs(
+#                                 metal_test_df["y_calc"] - metal_test_df["y_pred"]
+#                             )
+#                         ],
+#                     )
+#                 ]
 
-    # Update global layout
-    ener_layout = go.Layout(
-        width=597,
-        height=597,
-        font=dict(family="Arial", color="black"),
-        margin=dict(
-            l=0,
-            r=0,
-            b=0,
-            t=0,
-        ),
-        hoverlabel={"namelength": -1},
-        # title=dict(text=plot_title, x=0.5, ),
-        paper_bgcolor="white",
-        plot_bgcolor="white",
-        legend=dict(
-            xanchor="right",
-            x=1,
-            yanchor="bottom",
-            y=0,
-            bgcolor="rgba(0,0,0,0.1)",  # bordercolor='rgba(0,0,0,0.4)',
-            font_size=26,
-            tracegroupgap=2,
-        ),
-        xaxis=dict(
-            title_font_size=30,
-            range=range_ext,
-            showticklabels=showticklabels,  # title='E<sub>DFT</sub> / eV',
-            showline=True,
-            linewidth=3,
-            linecolor="black",
-            mirror=True,
-            showgrid=False,
-            zeroline=False,
-            gridcolor="rgba(0,0,0,0.3)",
-            ticks="outside",
-            tickfont_size=26,
-            tickformat=".1f",
-            tickwidth=3,
-            ticklen=6,
-        ),
-        yaxis=dict(
-            title_font_size=30,
-            range=range_ext,
-            showticklabels=showticklabels,  # lreg_energy_fig_set1_ncoordmos
-            showline=True,
-            linewidth=3,
-            linecolor="black",
-            mirror=True,
-            showgrid=False,
-            zeroline=False,
-            gridcolor="rgba(0,0,0,0.3)",
-            ticks="outside",
-            tickfont_size=26,
-            tickformat=".1f",
-            tickwidth=3,
-            ticklen=6,
-        ),
-    )
+#                 _ = ener_fig.add_trace(
+#                     go.Scatter(
+#                         x=metal_test_df["y_calc"],
+#                         y=metal_test_df["y_pred"],
+#                         mode="markers",
+#                         marker=dict(
+#                             size=11,
+#                             symbol="x",
+#                             opacity=1,
+#                             line=dict(
+#                                 width=0.5,
+#                                 color="rgba(255, 255, 255, 0.5)",
+#                             ),
+#                         ),
+#                         hoverinfo="text+x+y",
+#                         name=_column_value,
+#                         text=test_plot_text,
+#                         legendgroup=_column_value,
+#                         showlegend=test_legend,
+#                     ),
+#                 )
 
-    _ = ener_fig.update_layout(ener_layout)
+#     # # fig_for_range = ener_fig.full_figure_for_development(warn=False)
+#     # # x_range = fig_for_range.layout.xaxis.range
+#     # # y_range = fig_for_range.layout.xaxis.range
+#     # big_range = [min(x_range+y_range), max(x_range+y_range)]
+#     all_values = (
+#         train_df["y_calc"].tolist()
+#         + train_df["y_pred"].tolist()
+#         + test_df["y_calc"].tolist()
+#         + test_df["y_pred"].tolist()
+#     )
+#     full_range = [min(all_values), max(all_values)]
+#     range_ext = (
+#         full_range[0] - 0.075 * np.ptp(full_range),
+#         full_range[1] + 0.075 * np.ptp(full_range),
+#     )
+#     # x_range_ext = (x_range[0] - 0.075*np.ptp(x_range), x_range[1] + 0.075*np.ptp(x_range))
+#     # y_range_ext = (y_range[0] - 0.075*np.ptp(y_range), y_range[1] + 0.075*np.ptp(y_range))
+#     if set_range is not None:
+#         range_ext = set_range
 
-    # Add ideal fit line to plot
-    _ = ener_fig.add_trace(
-        go.Scatter(
-            x=range_ext,
-            y=range_ext,
-            mode="lines",
-            line=dict(color="black", width=2, dash="dash"),
-            hoverinfo="skip",
-            showlegend=False,
-        ),
-    )
+#     # Update global layout
+#     ener_layout = go.Layout(
+#         width=597,
+#         height=597,
+#         font=dict(family="Arial", color="black"),
+#         margin=dict(
+#             l=0,
+#             r=0,
+#             b=0,
+#             t=0,
+#         ),
+#         hoverlabel={"namelength": -1},
+#         # title=dict(text=plot_title, x=0.5, ),
+#         paper_bgcolor="white",
+#         plot_bgcolor="white",
+#         legend=dict(
+#             xanchor="right",
+#             x=1,
+#             yanchor="bottom",
+#             y=0,
+#             bgcolor="rgba(0,0,0,0.1)",  # bordercolor='rgba(0,0,0,0.4)',
+#             font_size=26,
+#             tracegroupgap=2,
+#         ),
+#         xaxis=dict(
+#             title_font_size=30,
+#             range=range_ext,
+#             showticklabels=showticklabels,  # title='E<sub>DFT</sub> / eV',
+#             showline=True,
+#             linewidth=3,
+#             linecolor="black",
+#             mirror=True,
+#             showgrid=False,
+#             zeroline=False,
+#             gridcolor="rgba(0,0,0,0.3)",
+#             ticks="outside",
+#             tickfont_size=26,
+#             tickformat=".1f",
+#             tickwidth=3,
+#             ticklen=6,
+#         ),
+#         yaxis=dict(
+#             title_font_size=30,
+#             range=range_ext,
+#             showticklabels=showticklabels,  # lreg_energy_fig_set1_ncoordmos
+#             showline=True,
+#             linewidth=3,
+#             linecolor="black",
+#             mirror=True,
+#             showgrid=False,
+#             zeroline=False,
+#             gridcolor="rgba(0,0,0,0.3)",
+#             ticks="outside",
+#             tickfont_size=26,
+#             tickformat=".1f",
+#             tickwidth=3,
+#             ticklen=6,
+#         ),
+#     )
 
-    return ener_fig
+#     _ = ener_fig.update_layout(ener_layout)
+
+#     # Add ideal fit line to plot
+#     _ = ener_fig.add_trace(
+#         go.Scatter(
+#             x=range_ext,
+#             y=range_ext,
+#             mode="lines",
+#             line=dict(color="black", width=2, dash="dash"),
+#             hoverinfo="skip",
+#             showlegend=False,
+#         ),
+#     )
+
+#     return ener_fig
 
 
 def plot_errors(

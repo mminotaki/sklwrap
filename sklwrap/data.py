@@ -106,12 +106,68 @@ svr_dict = {
     "verbose": False,
 }
 
-# Default figure layout for energy-figures
-energy_layout = go.Layout(
-    # Update global layout
-    width=600,
-    height=600,
-    font=dict(family="Arial", color="black", size=26),
+# # Default figure layout for energy-figures
+# energy_layout = go.Layout(
+#     # Update global layout
+#     width=600,
+#     height=600,
+#     font=dict(family="Arial", color="black", size=26),
+#     margin=dict(
+#         l=0,
+#         r=0,
+#         b=0,
+#         t=0,
+#     ),
+#     hoverlabel={"namelength": -1},
+#     # title=dict(text=plot_title, x=0.5, ),
+#     paper_bgcolor="white",
+#     plot_bgcolor="white",
+#     legend=dict(
+#         xanchor="right",
+#         x=1,
+#         yanchor="bottom",
+#         y=0,
+#         bgcolor="rgba(0,0,0,0.1)",  # bordercolor='rgba(0,0,0,0.4)',
+#         font_size=26,
+#         tracegroupgap=2,
+#     ),
+#     xaxis=dict(
+#         title="E<sub>DFT</sub> / eV",
+#         title_font_size=30,
+#         showline=True,
+#         linewidth=3,
+#         linecolor="black",
+#         mirror=True,
+#         showgrid=False,
+#         zeroline=False,
+#         ticks="outside",
+#         tickfont_size=26,
+#         tickformat=".1f",
+#         tickwidth=3,
+#         ticklen=6,
+#     ),
+#     yaxis=dict(
+#         title="E<sub>pred</sub> / eV",
+#         title_font_size=30,
+#         showline=True,
+#         linewidth=3,
+#         linecolor="black",
+#         mirror=True,
+#         showgrid=False,
+#         zeroline=False,
+#         ticks="outside",
+#         tickfont_size=26,
+#         tickformat=".1f",
+#         tickwidth=3,
+#         ticklen=6,
+#     ),
+# )
+
+
+regr_layout = go.Layout(
+    width=597,
+    height=597,
+    font=dict(family="Arial", color="black"),
     margin=dict(
         l=0,
         r=0,
@@ -119,7 +175,6 @@ energy_layout = go.Layout(
         t=0,
     ),
     hoverlabel={"namelength": -1},
-    # title=dict(text=plot_title, x=0.5, ),
     paper_bgcolor="white",
     plot_bgcolor="white",
     legend=dict(
@@ -127,12 +182,11 @@ energy_layout = go.Layout(
         x=1,
         yanchor="bottom",
         y=0,
-        bgcolor="rgba(0,0,0,0.1)",  # bordercolor='rgba(0,0,0,0.4)',
+        bgcolor="rgba(0,0,0,0.1)",
         font_size=26,
         tracegroupgap=2,
     ),
     xaxis=dict(
-        title="E<sub>DFT</sub> / eV",
         title_font_size=30,
         showline=True,
         linewidth=3,
@@ -140,6 +194,7 @@ energy_layout = go.Layout(
         mirror=True,
         showgrid=False,
         zeroline=False,
+        gridcolor="rgba(0,0,0,0.3)",
         ticks="outside",
         tickfont_size=26,
         tickformat=".1f",
@@ -147,7 +202,6 @@ energy_layout = go.Layout(
         ticklen=6,
     ),
     yaxis=dict(
-        title="E<sub>pred</sub> / eV",
         title_font_size=30,
         showline=True,
         linewidth=3,
@@ -155,6 +209,7 @@ energy_layout = go.Layout(
         mirror=True,
         showgrid=False,
         zeroline=False,
+        gridcolor="rgba(0,0,0,0.3)",
         ticks="outside",
         tickfont_size=26,
         tickformat=".1f",
@@ -162,6 +217,7 @@ energy_layout = go.Layout(
         ticklen=6,
     ),
 )
+
 
 pca_layout = go.Layout(
     width=600,

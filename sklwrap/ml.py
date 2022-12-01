@@ -1,9 +1,10 @@
 import copy
+from operator import itemgetter
 
 import numpy as np
 import pandas as pd
 import plotly.graph_objs as go
-from sklearn.linear_model import ElasticNet
+from sklearn.linear_model import ElasticNet, Lasso, LinearRegression, Ridge
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import KFold
 from sklearn.preprocessing import StandardScaler
@@ -11,21 +12,30 @@ from tqdm import trange
 
 from .data import *
 from .misc import apply_feat_mask
-from .vis import plot_energies, plot_errors
+
+# from .vis import plot_energies, plot_errors
+
+# def create_split(X, y, n_splits=5, split_select=0):
+
+#     split_count = 0
+
+#     kf_split = KFold(n_splits=n_splits, shuffle=False).split(X, y)
+
+#     for train_index, test_index in kf_split:
+#         if split_count == split_select:
+#             break
+#         split_count += 1
+
+#     return X[train_index], X[test_index], y[train_index], y[test_index]
 
 
-def create_split(X, y, n_splits=5, split_select=0):
-
-    split_count = 0
-
-    kf_split = KFold(n_splits=n_splits, shuffle=False).split(X, y)
-
-    for train_index, test_index in kf_split:
-        if split_count == split_select:
-            break
-        split_count += 1
-
-    return X[train_index], X[test_index], y[train_index], y[test_index]
+NEED_TO_STANDARDIZE = (
+    LinearRegression,
+    Lasso,
+    Ridge,
+    ElasticNet,
+    SVR,
+)
 
 
 def run_regr(
@@ -33,235 +43,125 @@ def run_regr(
     ml_model,
     ml_features,
     ml_target,
-    cv_type="kfold",
-    n_splits=5,
-    color_dict=None,
+    cv_setup={"cv_type": "kfold", "cv_spec": 5},
+    # append_df=False,  # Append everything to func_df either way.
 ):
     df_func = df_in.copy(deep=True)
+    num_rows = df_func.shape[0]
+
+    # Initialize all the empty lists that hold all the data for the return dictionary.
     ml_models = []
+    scalers = []
     X_trains, X_tests, X_fulls = [], [], []
-    y_trains, y_tests, y_fulls, y_train_preds, y_test_preds, y_full_preds = (
-        [],
-        [],
-        [],
-        [],
-        [],
-        [],
-    )
-    m_trains, m_tests, m_fulls, l_trains, l_tests, l_fulls = (
-        [],
-        [],
-        [],
-        [],
-        [],
-        [],
-    )
+    y_trains, y_tests, y_fulls = [], [], []
+
+    y_train_preds, y_test_preds, y_full_preds = [], [], []
+
+    m_trains, m_tests, m_fulls = [], [], []
+    l_trains, l_tests, l_fulls = [], [], []
+
     rmse_trains, rmse_tests, rmse_fulls = [], [], []
     mae_trains, mae_tests, mae_fulls = [], [], []
     rsquared_trains, rsquared_tests, rsquared_fulls = [], [], []
 
-    # if isinstance(ml_model, Pipeline): # -> TODO: Maybe it'll work the same way, by just feeding a pipeline...
-    #     print("Your ML model is a pipeline. I expect data standardization to be in the pipeline, if it is needed.")
+    # Add splitting indices to Dataframe based on K-Fold or LOGOCV. Could externalize this as function.
+    # This is done so that they can be treated with the same footing later on when the data is standardized and the models are trained.
+    if cv_setup["cv_type"].lower() == "kfold":
+        split_column_number = cv_setup["cv_spec"]
+        split_array = np.full((num_rows, split_column_number), False)
 
-    # Don't return DF here, as depending on KFold-split settings and LOOCV a different number of data distributions
-    # will get evaluated.
+        kf = KFold(n_splits=cv_setup["cv_spec"], shuffle=False)
+        for isplit, split in enumerate(kf.split(range(num_rows))):
+            train_indices, test_indices = split
+            split_array[[train_indices], isplit] = True
 
-    if cv_type == "kfold":
-
-        # TODO: Verify why normal selection with square brackets doesn't work.
-        # TODO: Also, this is not good code, as distinction between list and np.array is very shady to distinguish between a list of feature names, and actual values passed.
-        X = df_in[ml_features].values
-        if len(ml_target) == 1:
-            y = df_in[ml_target].values.ravel()
-        elif len(ml_target) > 1:
-            # TODO: This is not relevant if I'm not doing multivariate regression
-            y = df_in[ml_target].values
-        else:
-            print(ml_features, type(ml_features))
-            print(ml_target)
-            raise TypeError
-
-        for n_split in range(n_splits):
-
-            X_train, X_test, y_train, y_test = create_split(
-                X=X, y=y, n_splits=n_splits, split_select=n_split
-            )
-
-            # TODO: Generalize references to 'metal' columns
-            # ! Hacky "solution" using try except.
-            try:
-                m_train, m_test, l_train, l_test = create_split(
-                    X=np.array(df_in["metal"].to_list()),
-                    y=np.array(df_in["plot_label"].to_list()),
-                    n_splits=n_splits,
-                    split_select=n_split,
-                )
-            except KeyError:
-                m_train, m_test, l_train, l_test = create_split(
-                    X=np.array(["_" for _ in range(df_in.shape[0])]),
-                    y=np.array(["_" for _ in range(df_in.shape[0])]),
-                    n_splits=n_splits,
-                    split_select=n_split,
-                )
-
-            # Need to standardize data for linear models. Not necessary for RF.
-            # TODO: Implement usage of a pipeline without the code breaking, for example for PCR. Scaler in pipeline? I'd say so, but haw can we retrieve the scaled data???
-            # TODO: Code fragment duplicated once for k-fold, once for loocv -> This issue will be resolved with the general package, when CV is evaluated lazily by adding a column to the df.
-            if isinstance(ml_model, NEED_TO_STANDARDIZE) is True:
-                # This code trains and scales. Note, I don't rename it, so that I can still use the same variables, irrespective of if it is scaled or not.
-                train_scaler = StandardScaler().fit(X_train)
-                X_train = train_scaler.transform(X_train)
-                X_test = train_scaler.transform(X_test)
-
-            # Fit and predict
-            _ = ml_model.fit(X_train, y_train)
-            y_train_pred, y_test_pred = ml_model.predict(X_train), ml_model.predict(
-                X_test
-            )
-
-            # Re-concatenation instead of taking initial y again for the case of shuffling in train-test-split.
-            X_full = np.concatenate([X_train, X_test])
-            y_full = np.concatenate([y_train, y_test])
-            y_full_pred = np.concatenate([y_train_pred, y_test_pred])
-            m_full = np.concatenate([m_train, m_test])
-            l_full = np.concatenate([l_train, l_test])
-
-            rmse_train = mean_squared_error(y_train, y_train_pred, squared=False)
-            rmse_test = mean_squared_error(y_test, y_test_pred, squared=False)
-            rmse_full = mean_squared_error(y_full, y_full_pred, squared=False)
-            mae_train = mean_absolute_error(y_train, y_train_pred)
-            mae_test = mean_absolute_error(y_test, y_test_pred)
-            mae_full = mean_absolute_error(y_full, y_full_pred)
-            rsquared_train = r2_score(y_train, y_train_pred)
-            rsquared_test = r2_score(y_test, y_test_pred)
-            rsquared_full = r2_score(y_full, y_full_pred)
-
-            ml_models.append(ml_model)
-            X_trains.append(X_train)
-            X_tests.append(X_test)
-            X_fulls.append(X_full)
-            y_trains.append(y_train)
-            y_tests.append(y_test)
-            y_fulls.append(y_full)
-            y_train_preds.append(y_train_pred)
-            y_test_preds.append(y_test_pred)
-            y_full_preds.append(y_full_pred)
-            m_trains.append(m_train)
-            m_tests.append(m_test)
-            m_fulls.append(m_full)
-            l_trains.append(l_train)
-            l_tests.append(l_test)
-            l_fulls.append(l_full)
-            rmse_trains.append(rmse_train)
-            rmse_tests.append(rmse_test)
-            rmse_fulls.append(rmse_full)
-            mae_trains.append(mae_train)
-            mae_tests.append(mae_test)
-            mae_fulls.append(mae_full)
-            rsquared_trains.append(rsquared_train)
-            rsquared_tests.append(rsquared_test)
-            rsquared_fulls.append(rsquared_full)
-
-    # Generalize loocv to column name and unique values here.
-    else:
-
-        # Do similar as above, but not over KFold-split and different data sets, but different metals/or sthg general.
-        # Here, I need to do the splitting with the df and not with X, and y, bc I select the data points based on the
-        # "metal" column. However, could also first evaluate the indices along this column and then use that...
-
-        for group_val in df_in[cv_type].unique():
-
-            nom_df = df_in.loc[
-                df_in[cv_type].isin(
-                    [_ for _ in df_in[cv_type].unique() if _ != group_val]
-                )
+    elif cv_setup["cv_type"].lower() == "logocv":
+        logocv_column = cv_setup["cv_spec"]
+        split_column_number = len(set(df_func[logocv_column]))
+        split_array = np.full((num_rows, split_column_number), False)
+        for ilogocv_value, logocv_value in enumerate(
+            set(df_func[logocv_column].values)
+        ):
+            split_array[:, ilogocv_value] = [
+                _ == logocv_value for _ in df_func[logocv_column].values
             ]
-            m_df = df_in.loc[df_in[cv_type] == group_val]
 
-            X_train, X_test = (
-                nom_df[ml_features].to_numpy(),
-                m_df[ml_features].to_numpy(),
-            )
-            # y_train , y_test = nom_df[ml_target].to_numpy(), m_df[ml_target]
+    split_column_names = ["train_{:02d}".format(i) for i in range(split_column_number)]
+    df_split = pd.DataFrame(
+        data=split_array, columns=split_column_names, index=df_func.index
+    )
+    df_func = pd.concat([df_func, df_split], axis=1)
 
-            if len(ml_target) == 1:
-                y_train, y_test = (
-                    nom_df[ml_target].values.ravel(),
-                    m_df[ml_target].values.ravel(),
-                )
-            elif len(ml_target) > 1:
-                y_train, y_test = nom_df[ml_target].values, m_df[ml_target].values
-            else:
-                print(ml_features, type(ml_features))
-                print(ml_target)
-                raise TypeError
+    # Actually iterate through the data-splits
+    X = df_func[ml_features].values
+    y = df_func[ml_target].values
 
-            X_train, X_test = X_train.astype("float32"), X_test.astype("float32")
-            y_train, y_test = y_train.astype("float32"), y_test.astype("float32")
+    for split_column_name in split_column_names:
+        split_column = df_func[split_column_name].values
 
-            m_train, m_test = nom_df[cv_type].to_list(), m_df[cv_type].to_list()
-            l_train, l_test = (
-                nom_df["plot_label"].to_list(),
-                m_df["plot_label"].to_list(),
-            )
+        X_train, X_test = X[np.logical_not(split_column)], X[split_column]
+        y_train, y_test = y[np.logical_not(split_column)], y[split_column]
 
-            # Need to standardize data for linear models. Not necessary for RF.
-            if isinstance(ml_model, NEED_TO_STANDARDIZE) is True:
-                # This code trains and scales. Note, I don't rename it, so that I can still use the same variables, irrespective of if it is scaled or not.
-                train_scaler = StandardScaler().fit(X_train)
-                X_train = train_scaler.transform(X_train)
-                X_test = train_scaler.transform(X_test)
+        # color_train, color_test
+        # label_train, label_test
 
-            # Fit and predict
-            _ = ml_model.fit(X_train, y_train)
-            y_train_pred, y_test_pred = ml_model.predict(X_train), ml_model.predict(
-                X_test
-            )
+        # Standardization within data splitting to avoid data leakage from testing data.
+        if isinstance(ml_model, NEED_TO_STANDARDIZE) is True:
+            train_scaler = StandardScaler().fit(X_train)
+            X_train = train_scaler.transform(X_train)
+            X_test = train_scaler.transform(X_test)
 
-            # Re-concatenation instead of taking initial y again for the case of shuffling in train-test-split.
-            X_full = np.concatenate([X_train, X_test])
-            y_full = np.concatenate([y_train, y_test])
-            y_full_pred = np.concatenate([y_train_pred, y_test_pred])
-            m_full = np.concatenate([m_train, m_test])
-            l_full = np.concatenate([l_train, l_test])
+        # TODO: Maybe it'll work the same way, by just feeding a pipeline? Insert data standardization into pipeline???
+        # if isinstance(ml_model, Pipeline):
+        #     print("Your ML model is a pipeline. I expect data standardization to be in the pipeline, if it is needed.")
 
-            rmse_train = mean_squared_error(y_train, y_train_pred, squared=False)
-            rmse_test = mean_squared_error(y_test, y_test_pred, squared=False)
-            rmse_full = mean_squared_error(y_full, y_full_pred, squared=False)
-            mae_train = mean_absolute_error(y_train, y_train_pred)
-            mae_test = mean_absolute_error(y_test, y_test_pred)
-            mae_full = mean_absolute_error(y_full, y_full_pred)
-            rsquared_train = r2_score(y_train, y_train_pred)
-            rsquared_test = r2_score(y_test, y_test_pred)
-            rsquared_full = r2_score(y_full, y_full_pred)
+        # Fit and predict
+        _ = ml_model.fit(X_train, y_train)
+        y_train_pred, y_test_pred = ml_model.predict(X_train), ml_model.predict(X_test)
 
-            ml_models.append(ml_model)
-            X_trains.append(X_train)
-            X_tests.append(X_test)
-            X_fulls.append(X_full)
-            y_trains.append(y_train)
-            y_tests.append(y_test)
-            y_fulls.append(y_full)
-            y_train_preds.append(y_train_pred)
-            y_test_preds.append(y_test_pred)
-            y_full_preds.append(y_full_pred)
-            m_trains.append(m_train)
-            m_tests.append(m_test)
-            m_fulls.append(m_full)
-            l_trains.append(l_train)
-            l_tests.append(l_test)
-            l_fulls.append(l_full)
-            rmse_trains.append(rmse_train)
-            rmse_tests.append(rmse_test)
-            rmse_fulls.append(rmse_full)
-            mae_trains.append(mae_train)
-            mae_tests.append(mae_test)
-            mae_fulls.append(mae_full)
-            rsquared_trains.append(rsquared_train)
-            rsquared_tests.append(rsquared_test)
-            rsquared_fulls.append(rsquared_full)
+        # Re-concatenation instead of taking initial y again for the case of shuffling in train-test-split.
+        X_full = np.concatenate([X_train, X_test])
+        y_full = np.concatenate([y_train, y_test])
+        y_full_pred = np.concatenate([y_train_pred, y_test_pred])
+        # m_full = np.concatenate([m_train, m_test])
+        # l_full = np.concatenate([l_train, l_test])
 
-    # Here done with the cross-validation, just sort all data in the return-dictionary.
+        rmse_train = mean_squared_error(y_train, y_train_pred, squared=False)
+        rmse_test = mean_squared_error(y_test, y_test_pred, squared=False)
+        rmse_full = mean_squared_error(y_full, y_full_pred, squared=False)
+        mae_train = mean_absolute_error(y_train, y_train_pred)
+        mae_test = mean_absolute_error(y_test, y_test_pred)
+        mae_full = mean_absolute_error(y_full, y_full_pred)
+        rsquared_train = r2_score(y_train, y_train_pred)
+        rsquared_test = r2_score(y_test, y_test_pred)
+        rsquared_full = r2_score(y_full, y_full_pred)
+
+        ml_models.append(ml_model)
+        X_trains.append(X_train)
+        X_tests.append(X_test)
+        X_fulls.append(X_full)
+        y_trains.append(y_train)
+        y_tests.append(y_test)
+        y_fulls.append(y_full)
+        y_train_preds.append(y_train_pred)
+        y_test_preds.append(y_test_pred)
+        y_full_preds.append(y_full_pred)
+        # m_trains.append(m_train)
+        # m_tests.append(m_test)
+        # m_fulls.append(m_full)
+        # l_trains.append(l_train)
+        # l_tests.append(l_test)
+        # l_fulls.append(l_full)
+        rmse_trains.append(rmse_train)
+        rmse_tests.append(rmse_test)
+        rmse_fulls.append(rmse_full)
+        mae_trains.append(mae_train)
+        mae_tests.append(mae_test)
+        mae_fulls.append(mae_full)
+        rsquared_trains.append(rsquared_train)
+        rsquared_tests.append(rsquared_test)
+        rsquared_fulls.append(rsquared_full)
+
     result_dict = {
         "X_trains": X_trains,
         "X_tests": X_tests,
@@ -291,17 +191,21 @@ def run_regr(
         "rsquared_tests": rsquared_tests,
         "rsquared_fulls": rsquared_fulls,
     }
+
     best_id = np.argmin(rmse_tests)
 
     return {
+        "df_in": df_in,
+        "cv_setup": cv_setup,
         "ml_models": ml_models,
-        "best_id": best_id,
+        "scalers": scalers,
+        "df_split": df_split,
         "result_dict": result_dict,
         "error_dict": error_dict,
+        "best_id": best_id,
     }
 
 
-# @timecall
 def vary_ml_param(
     df_in,
     ml_base_model,
@@ -320,28 +224,14 @@ def vary_ml_param(
 
     counter = 0
     ml_models, test_rmses, feature_coefs = [], [], []
-    param_values = list(ml_param_dict.values())[0]
-    # Lazy style, using try-except instead of proper programming. Could do also with isinstance. However, as convention,
-    # always pass param_values as list, with length one for single value.
-    # try:
-    errors_array = np.zeros(shape=(len(param_values), 9))
-    # except TypeError:
-    #     errors_array = np.zeros(shape=(1, 6))
+    ml_param_values = list(ml_param_dict.values())[0]
+    errors_array = np.zeros(shape=(len(ml_param_values), 9))
 
-    # If verbosity turned on, print timing information with trange.
-    if verbose is True:
-        ml_param_range = trange(param_values)
-    else:
-        ml_param_range = param_values
-
-    for ml_param_value in ml_param_range:
-
-        # print("Param: {:.6f}".format(ml_param_value))
+    for ml_param_value in ml_param_values:
 
         ml_mod_model = copy.deepcopy(
             ml_base_model.set_params(**{list(ml_param_dict.keys())[0]: ml_param_value})
         )
-        # print("ml_mod_model: {}".format(ml_mod_model))
 
         ml_param_run = run_regr(
             df_in=df_in,
@@ -374,12 +264,12 @@ def vary_ml_param(
 
     return_dict["ml_models"] = ml_models
     return_dict["best_id"] = best_id
-    return_dict["best_param"] = ml_param_range[best_id]
+    return_dict["best_param"] = ml_param_values[best_id]
     return_dict["test_rmses"] = test_rmses
 
     best_model = ml_models[best_id]
 
-    if len(ml_param_range) == 1:
+    if len(ml_param_values) == 1:
         best_model_run = ml_param_run
     else:
         best_model_run = run_regr(
@@ -410,7 +300,7 @@ def vary_ml_param(
 
     error_fig = plot_errors(
         error_dict=errors_dict,
-        x_values=param_values,
+        x_values=ml_param_values,
         plot_measures=[
             "rmses_trains",
             "rmses_tests",
@@ -419,7 +309,7 @@ def vary_ml_param(
             "maes_trains",
             "maes_tests",
         ],
-        annot_text=[""] * len(param_values),
+        annot_text=[""] * len(ml_param_values),
         x_title=list(ml_param_dict.keys())[0],
     )
 
