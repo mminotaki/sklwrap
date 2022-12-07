@@ -89,6 +89,7 @@ def plotly_to_image(
     return None
 
 
+# region
 # def plot_regr(
 #     result_dict,
 #     error_dict,
@@ -509,6 +510,7 @@ def plotly_to_image(
 #     )
 
 #     return ener_fig
+# endregion
 
 
 def plot_errors(

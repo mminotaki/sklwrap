@@ -8,26 +8,12 @@ from sklearn.linear_model import ElasticNet, Lasso, LinearRegression, Ridge
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import KFold
 from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVR
 from tqdm import trange
 
-from .data import *
-from .misc import apply_feat_mask
-
+# from .data import *
+# from .misc import apply_feat_mask
 # from .vis import plot_energies, plot_errors
-
-# def create_split(X, y, n_splits=5, split_select=0):
-
-#     split_count = 0
-
-#     kf_split = KFold(n_splits=n_splits, shuffle=False).split(X, y)
-
-#     for train_index, test_index in kf_split:
-#         if split_count == split_select:
-#             break
-#         split_count += 1
-
-#     return X[train_index], X[test_index], y[train_index], y[test_index]
-
 
 NEED_TO_STANDARDIZE = (
     LinearRegression,
@@ -38,446 +24,284 @@ NEED_TO_STANDARDIZE = (
 )
 
 
-def run_regr(
-    df_in,
-    ml_model,
-    ml_features,
-    ml_target,
-    cv_setup={"cv_type": "kfold", "cv_spec": 5},
-    # append_df=False,  # Append everything to func_df either way.
-):
-    df_func = df_in.copy(deep=True)
-    num_rows = df_func.shape[0]
+# def add_split_columns(
 
-    # Initialize all the empty lists that hold all the data for the return dictionary.
-    ml_models = []
-    scalers = []
-    X_trains, X_tests, X_fulls = [], [], []
-    y_trains, y_tests, y_fulls = [], [], []
-
-    y_train_preds, y_test_preds, y_full_preds = [], [], []
-
-    m_trains, m_tests, m_fulls = [], [], []
-    l_trains, l_tests, l_fulls = [], [], []
-
-    rmse_trains, rmse_tests, rmse_fulls = [], [], []
-    mae_trains, mae_tests, mae_fulls = [], [], []
-    rsquared_trains, rsquared_tests, rsquared_fulls = [], [], []
-
-    # Add splitting indices to Dataframe based on K-Fold or LOGOCV. Could externalize this as function.
-    # This is done so that they can be treated with the same footing later on when the data is standardized and the models are trained.
-    if cv_setup["cv_type"].lower() == "kfold":
-        split_column_number = cv_setup["cv_spec"]
-        split_array = np.full((num_rows, split_column_number), False)
-
-        kf = KFold(n_splits=cv_setup["cv_spec"], shuffle=False)
-        for isplit, split in enumerate(kf.split(range(num_rows))):
-            train_indices, test_indices = split
-            split_array[[train_indices], isplit] = True
-
-    elif cv_setup["cv_type"].lower() == "logocv":
-        logocv_column = cv_setup["cv_spec"]
-        split_column_number = len(set(df_func[logocv_column]))
-        split_array = np.full((num_rows, split_column_number), False)
-        for ilogocv_value, logocv_value in enumerate(
-            set(df_func[logocv_column].values)
-        ):
-            split_array[:, ilogocv_value] = [
-                _ == logocv_value for _ in df_func[logocv_column].values
-            ]
-
-    split_column_names = ["train_{:02d}".format(i) for i in range(split_column_number)]
-    df_split = pd.DataFrame(
-        data=split_array, columns=split_column_names, index=df_func.index
-    )
-    df_func = pd.concat([df_func, df_split], axis=1)
-
-    # Actually iterate through the data-splits
-    X = df_func[ml_features].values
-    y = df_func[ml_target].values
-
-    for split_column_name in split_column_names:
-        split_column = df_func[split_column_name].values
-
-        X_train, X_test = X[np.logical_not(split_column)], X[split_column]
-        y_train, y_test = y[np.logical_not(split_column)], y[split_column]
-
-        # color_train, color_test
-        # label_train, label_test
-
-        # Standardization within data splitting to avoid data leakage from testing data.
-        if isinstance(ml_model, NEED_TO_STANDARDIZE) is True:
-            train_scaler = StandardScaler().fit(X_train)
-            X_train = train_scaler.transform(X_train)
-            X_test = train_scaler.transform(X_test)
-
-        # TODO: Maybe it'll work the same way, by just feeding a pipeline? Insert data standardization into pipeline???
-        # if isinstance(ml_model, Pipeline):
-        #     print("Your ML model is a pipeline. I expect data standardization to be in the pipeline, if it is needed.")
-
-        # Fit and predict
-        _ = ml_model.fit(X_train, y_train)
-        y_train_pred, y_test_pred = ml_model.predict(X_train), ml_model.predict(X_test)
-
-        # Re-concatenation instead of taking initial y again for the case of shuffling in train-test-split.
-        X_full = np.concatenate([X_train, X_test])
-        y_full = np.concatenate([y_train, y_test])
-        y_full_pred = np.concatenate([y_train_pred, y_test_pred])
-        # m_full = np.concatenate([m_train, m_test])
-        # l_full = np.concatenate([l_train, l_test])
-
-        rmse_train = mean_squared_error(y_train, y_train_pred, squared=False)
-        rmse_test = mean_squared_error(y_test, y_test_pred, squared=False)
-        rmse_full = mean_squared_error(y_full, y_full_pred, squared=False)
-        mae_train = mean_absolute_error(y_train, y_train_pred)
-        mae_test = mean_absolute_error(y_test, y_test_pred)
-        mae_full = mean_absolute_error(y_full, y_full_pred)
-        rsquared_train = r2_score(y_train, y_train_pred)
-        rsquared_test = r2_score(y_test, y_test_pred)
-        rsquared_full = r2_score(y_full, y_full_pred)
-
-        ml_models.append(ml_model)
-        X_trains.append(X_train)
-        X_tests.append(X_test)
-        X_fulls.append(X_full)
-        y_trains.append(y_train)
-        y_tests.append(y_test)
-        y_fulls.append(y_full)
-        y_train_preds.append(y_train_pred)
-        y_test_preds.append(y_test_pred)
-        y_full_preds.append(y_full_pred)
-        # m_trains.append(m_train)
-        # m_tests.append(m_test)
-        # m_fulls.append(m_full)
-        # l_trains.append(l_train)
-        # l_tests.append(l_test)
-        # l_fulls.append(l_full)
-        rmse_trains.append(rmse_train)
-        rmse_tests.append(rmse_test)
-        rmse_fulls.append(rmse_full)
-        mae_trains.append(mae_train)
-        mae_tests.append(mae_test)
-        mae_fulls.append(mae_full)
-        rsquared_trains.append(rsquared_train)
-        rsquared_tests.append(rsquared_test)
-        rsquared_fulls.append(rsquared_full)
-
-    result_dict = {
-        "X_trains": X_trains,
-        "X_tests": X_tests,
-        "X_fulls": X_fulls,
-        "y_trains": y_trains,
-        "y_tests": y_tests,
-        "y_fulls": y_fulls,
-        "y_train_preds": y_train_preds,
-        "y_test_preds": y_test_preds,
-        "y_full_preds": y_full_preds,
-        "m_trains": m_trains,
-        "m_tests": m_tests,
-        "m_fulls": m_fulls,
-        "l_trains": l_trains,
-        "l_tests": l_tests,
-        "l_fulls": l_fulls,
-    }
-
-    error_dict = {
-        "rmse_trains": rmse_trains,
-        "rmse_tests": rmse_tests,
-        "rmse_fulls": rmse_fulls,
-        "mae_trains": mae_trains,
-        "mae_tests": mae_tests,
-        "mae_fulls": mae_fulls,
-        "rsquared_trains": rsquared_trains,
-        "rsquared_tests": rsquared_tests,
-        "rsquared_fulls": rsquared_fulls,
-    }
-
-    best_id = np.argmin(rmse_tests)
-
-    return {
-        "df_in": df_in,
-        "cv_setup": cv_setup,
-        "ml_models": ml_models,
-        "scalers": scalers,
-        "df_split": df_split,
-        "result_dict": result_dict,
-        "error_dict": error_dict,
-        "best_id": best_id,
-    }
+# ):
+#     pass
 
 
-def vary_ml_param(
-    df_in,
-    ml_base_model,
-    ml_features,
-    ml_target,
-    ml_param_dict,
-    cv_type="kfold",
-    n_splits=5,
-    verbose=False,
-):
+# def vary_ml_param(
+#     df_in,
+#     ml_base_model,
+#     ml_features,
+#     ml_target,
+#     ml_param_dict,
+#     cv_type="kfold",
+#     n_splits=5,
+#     verbose=False,
+# ):
 
-    # Missing: Descriptor figure and number of features list/figure.
-    return_dict = {}
+#     # Missing: Descriptor figure and number of features list/figure.
+#     return_dict = {}
 
-    # coefs, numfeatures, models, rmses, y_preds, rsquareds = [], [], [], [], [], []
+#     # coefs, numfeatures, models, rmses, y_preds, rsquareds = [], [], [], [], [], []
 
-    counter = 0
-    ml_models, test_rmses, feature_coefs = [], [], []
-    ml_param_values = list(ml_param_dict.values())[0]
-    errors_array = np.zeros(shape=(len(ml_param_values), 9))
+#     counter = 0
+#     ml_models, test_rmses, feature_coefs = [], [], []
+#     ml_param_values = list(ml_param_dict.values())[0]
+#     errors_array = np.zeros(shape=(len(ml_param_values), 9))
 
-    for ml_param_value in ml_param_values:
+#     for ml_param_value in ml_param_values:
 
-        ml_mod_model = copy.deepcopy(
-            ml_base_model.set_params(**{list(ml_param_dict.keys())[0]: ml_param_value})
-        )
+#         ml_mod_model = copy.deepcopy(
+#             ml_base_model.set_params(**{list(ml_param_dict.keys())[0]: ml_param_value})
+#         )
 
-        ml_param_run = run_regr(
-            df_in=df_in,
-            ml_model=ml_mod_model,
-            ml_features=ml_features,
-            ml_target=ml_target,
-            cv_type=cv_type,
-            n_splits=n_splits,
-        )
+#         ml_param_run = run_regr(
+#             df_in=df_in,
+#             ml_model=ml_mod_model,
+#             ml_features=ml_features,
+#             ml_target=ml_target,
+#             cv_type=cv_type,
+#             n_splits=n_splits,
+#         )
 
-        ml_param_model = ml_param_run["ml_models"][ml_param_run["best_id"]]
-        error_dict = ml_param_run["error_dict"]
-        result_dict = ml_param_run["result_dict"]
+#         ml_param_model = ml_param_run["ml_models"][ml_param_run["best_id"]]
+#         error_dict = ml_param_run["error_dict"]
+#         result_dict = ml_param_run["result_dict"]
 
-        ml_models.append(ml_param_model)
+#         ml_models.append(ml_param_model)
 
-        # If before full CV done, average the errors.
-        for error_dict_key in list(error_dict.keys()):
-            error_dict[error_dict_key] = [np.mean(error_dict[error_dict_key])]
+#         # If before full CV done, average the errors.
+#         for error_dict_key in list(error_dict.keys()):
+#             error_dict[error_dict_key] = [np.mean(error_dict[error_dict_key])]
 
-        test_rmses.append(error_dict["rmse_tests"][0])
+#         test_rmses.append(error_dict["rmse_tests"][0])
 
-        errors_array[counter, :] = [
-            error_dict_value[0] for error_dict_value in list(error_dict.values())
-        ]
+#         errors_array[counter, :] = [
+#             error_dict_value[0] for error_dict_value in list(error_dict.values())
+#         ]
 
-        counter += 1
+#         counter += 1
 
-    best_id = np.argmin(test_rmses)
+#     best_id = np.argmin(test_rmses)
 
-    return_dict["ml_models"] = ml_models
-    return_dict["best_id"] = best_id
-    return_dict["best_param"] = ml_param_values[best_id]
-    return_dict["test_rmses"] = test_rmses
+#     return_dict["ml_models"] = ml_models
+#     return_dict["best_id"] = best_id
+#     return_dict["best_param"] = ml_param_values[best_id]
+#     return_dict["test_rmses"] = test_rmses
 
-    best_model = ml_models[best_id]
+#     best_model = ml_models[best_id]
 
-    if len(ml_param_values) == 1:
-        best_model_run = ml_param_run
-    else:
-        best_model_run = run_regr(
-            df_in=df_in,
-            ml_model=best_model,
-            ml_features=ml_features,
-            ml_target=ml_target,
-            cv_type=cv_type,
-            n_splits=n_splits,
-        )
+#     if len(ml_param_values) == 1:
+#         best_model_run = ml_param_run
+#     else:
+#         best_model_run = run_regr(
+#             df_in=df_in,
+#             ml_model=best_model,
+#             ml_features=ml_features,
+#             ml_target=ml_target,
+#             cv_type=cv_type,
+#             n_splits=n_splits,
+#         )
 
-    # Create energy plots
-    # This could now also be done outside. Return just best model and plot the result of best model fit.
-    # However, for convenience reasons do it here.
-    # TODO: Generalize this to any column name that should be plotted...
+#     # Create energy plots
+#     # This could now also be done outside. Return just best model and plot the result of best model fit.
+#     # However, for convenience reasons do it here.
+#     # TODO: Generalize this to any column name that should be plotted...
 
-    ener_fig = plot_energies(
-        result_dict=best_model_run["result_dict"],
-        error_dict=best_model_run["error_dict"],
-    )
+#     ener_fig = plot_energies(
+#         result_dict=best_model_run["result_dict"],
+#         error_dict=best_model_run["error_dict"],
+#     )
 
-    return_dict["ener_fig"] = ener_fig
+#     return_dict["ener_fig"] = ener_fig
 
-    error_headers = [error_key.replace("_", "s_") for error_key in error_dict.keys()]
-    errors_dict = {
-        key: value for key, value in zip(error_headers, errors_array.transpose())
-    }
+#     error_headers = [error_key.replace("_", "s_") for error_key in error_dict.keys()]
+#     errors_dict = {
+#         key: value for key, value in zip(error_headers, errors_array.transpose())
+#     }
 
-    error_fig = plot_errors(
-        error_dict=errors_dict,
-        x_values=ml_param_values,
-        plot_measures=[
-            "rmses_trains",
-            "rmses_tests",
-            "rsquareds_trains",
-            "rsquareds_tests",
-            "maes_trains",
-            "maes_tests",
-        ],
-        annot_text=[""] * len(ml_param_values),
-        x_title=list(ml_param_dict.keys())[0],
-    )
+#     error_fig = plot_errors(
+#         error_dict=errors_dict,
+#         x_values=ml_param_values,
+#         plot_measures=[
+#             "rmses_trains",
+#             "rmses_tests",
+#             "rsquareds_trains",
+#             "rsquareds_tests",
+#             "maes_trains",
+#             "maes_tests",
+#         ],
+#         annot_text=[""] * len(ml_param_values),
+#         x_title=list(ml_param_dict.keys())[0],
+#     )
 
-    return_dict["error_fig"] = error_fig
-    return_dict["errors_dict"] = errors_dict
+#     return_dict["error_fig"] = error_fig
+#     return_dict["errors_dict"] = errors_dict
 
-    # return_dict['numfeat_fig'] = numfeat_fig
+#     # return_dict['numfeat_fig'] = numfeat_fig
 
-    return return_dict
+#     return return_dict
 
 
 # @timecall
-def run_en_scan(
-    en_df, en_features, en_target, en_alphas, en_l1_ratios, cv_type="kfold", n_splits=5
-):
+# def run_en_scan(
+#     en_df, en_features, en_target, en_alphas, en_l1_ratios, cv_type="kfold", n_splits=5
+# ):
 
-    # If csv exists, read i, otherwise do scan.
-    # l1_ratios lower than 0.1 significantly increase calculation time. Idk why. Try out pure ridge run for timing test.
+#     # If csv exists, read i, otherwise do scan.
+#     # l1_ratios lower than 0.1 significantly increase calculation time. Idk why. Try out pure ridge run for timing test.
 
-    en_numfeat_array = np.zeros(shape=(len(en_l1_ratios), len(en_alphas)))
-    en_rmse_array = np.zeros(shape=(len(en_l1_ratios), len(en_alphas)))
+#     en_numfeat_array = np.zeros(shape=(len(en_l1_ratios), len(en_alphas)))
+#     en_rmse_array = np.zeros(shape=(len(en_l1_ratios), len(en_alphas)))
 
-    for ien_alpha, en_alpha in enumerate(en_alphas):
-        for ien_l1_ratio, en_l1_ratio in enumerate(en_l1_ratios):
+#     for ien_alpha, en_alpha in enumerate(en_alphas):
+#         for ien_l1_ratio, en_l1_ratio in enumerate(en_l1_ratios):
 
-            en_run = run_regr(
-                df_in=en_df,
-                ml_features=en_features,
-                ml_target=en_target,
-                ml_model=ElasticNet(
-                    alpha=en_alpha,
-                    l1_ratio=en_l1_ratio,
-                    max_iter=int(float("1e5")),
-                    tol=float("1e-3"),
-                    random_state=0,
-                ),
-                cv_type=cv_type,
-                n_splits=N_SPLITS,
-            )
+#             en_run = run_regr(
+#                 df_in=en_df,
+#                 ml_features=en_features,
+#                 ml_target=en_target,
+#                 ml_model=ElasticNet(
+#                     alpha=en_alpha,
+#                     l1_ratio=en_l1_ratio,
+#                     max_iter=int(float("1e5")),
+#                     tol=float("1e-3"),
+#                     random_state=0,
+#                 ),
+#                 cv_type=cv_type,
+#                 n_splits=N_SPLITS,
+#             )
 
-            selected_features = apply_feat_mask(
-                model=en_run["ml_models"][
-                    np.argmin(en_run["error_dict"]["rmse_tests"])
-                ],
-                model_features=en_features,
-                feat_thresh=0,
-            )
+#             selected_features = apply_feat_mask(
+#                 model=en_run["ml_models"][
+#                     np.argmin(en_run["error_dict"]["rmse_tests"])
+#                 ],
+#                 model_features=en_features,
+#                 feat_thresh=0,
+#             )
 
-            en_cv_best_rmse = np.min(en_run["error_dict"]["rmse_tests"])
+#             en_cv_best_rmse = np.min(en_run["error_dict"]["rmse_tests"])
 
-            en_rmse_array[ien_l1_ratio, ien_alpha] = en_cv_best_rmse
+#             en_rmse_array[ien_l1_ratio, ien_alpha] = en_cv_best_rmse
 
-            en_numfeat_array[ien_l1_ratio, ien_alpha] = len(selected_features)
+#             en_numfeat_array[ien_l1_ratio, ien_alpha] = len(selected_features)
 
-    numfeat_df = pd.DataFrame(data=en_numfeat_array).apply(
-        pd.to_numeric, downcast="integer"
-    )
-    rmse_df = pd.DataFrame(data=en_rmse_array)
+#     numfeat_df = pd.DataFrame(data=en_numfeat_array).apply(
+#         pd.to_numeric, downcast="integer"
+#     )
+#     rmse_df = pd.DataFrame(data=en_rmse_array)
 
-    return {
-        "en_alphas": en_alphas,
-        "en_l1_ratios": en_l1_ratios,
-        "numfeat_df": numfeat_df,
-        "rmse_df": rmse_df,
-    }
+#     return {
+#         "en_alphas": en_alphas,
+#         "en_l1_ratios": en_l1_ratios,
+#         "numfeat_df": numfeat_df,
+#         "rmse_df": rmse_df,
+#     }
 
 
-def loocv_all_points(df_in, ml_model, ml_features, ml_target, column, plot_range):
-    # TODO: Could adapt the other function such that it does the same. Keep somewhat duplicated code here.
+# def loocv_all_points(df_in, ml_model, ml_features, ml_target, column, plot_range):
+#     # TODO: Could adapt the other function such that it does the same. Keep somewhat duplicated code here.
 
-    rsquareds, rmses, maes, ener_figs = [], [], [], []
-    column_unique_vals = df_in[column].unique()
+#     rsquareds, rmses, maes, ener_figs = [], [], [], []
+#     column_unique_vals = df_in[column].unique()
 
-    for column_value in column_unique_vals:
+#     for column_value in column_unique_vals:
 
-        train_df = df_in.loc[
-            df_in[column].isin([_ for _ in column_unique_vals if _ != column_value])
-        ]
-        test_df = df_in.loc[df_in[column] == column_value]
+#         train_df = df_in.loc[
+#             df_in[column].isin([_ for _ in column_unique_vals if _ != column_value])
+#         ]
+#         test_df = df_in.loc[df_in[column] == column_value]
 
-        X_train, y_train = (
-            train_df[ml_features].to_numpy(),
-            train_df[ml_target].values.ravel(),
-        )
-        X_test, y_test = (
-            test_df[ml_features].to_numpy(),
-            test_df[ml_target].values.ravel(),
-        )
+#         X_train, y_train = (
+#             train_df[ml_features].to_numpy(),
+#             train_df[ml_target].values.ravel(),
+#         )
+#         X_test, y_test = (
+#             test_df[ml_features].to_numpy(),
+#             test_df[ml_target].values.ravel(),
+#         )
 
-        if isinstance(ml_model, NEED_TO_STANDARDIZE) is True:
-            train_scaler = StandardScaler().fit(X_train)
-            X_train = train_scaler.transform(X_train)
-            X_test = train_scaler.transform(X_test)
+#         if isinstance(ml_model, NEED_TO_STANDARDIZE) is True:
+#             train_scaler = StandardScaler().fit(X_train)
+#             X_train = train_scaler.transform(X_train)
+#             X_test = train_scaler.transform(X_test)
 
-        _ = ml_model.fit(X_train, y_train)
+#         _ = ml_model.fit(X_train, y_train)
 
-        y_pred = ml_model.predict(X_test)
+#         y_pred = ml_model.predict(X_test)
 
-        # All errors again only on testing data
-        rmse = mean_squared_error(y_test, y_pred, squared=False)
-        mae = mean_absolute_error(y_test, y_pred)
-        rsquared = r2_score(y_test, y_pred)
+#         # All errors again only on testing data
+#         rmse = mean_squared_error(y_test, y_pred, squared=False)
+#         mae = mean_absolute_error(y_test, y_pred)
+#         rsquared = r2_score(y_test, y_pred)
 
-        rsquareds.append(rsquared)
-        rmses.append(rmse)
-        maes.append(mae)
+#         rsquareds.append(rsquared)
+#         rmses.append(rmse)
+#         maes.append(mae)
 
-        # print("column_value: {} | RMSE: {:.3f} | MAE: {:.3f}".format(column_value, rmse, mae))
+#         # print("column_value: {} | RMSE: {:.3f} | MAE: {:.3f}".format(column_value, rmse, mae))
 
-        # Plot energies
-        ener_fig = go.Figure()
+#         # Plot energies
+#         ener_fig = go.Figure()
 
-        # Plot energy data points
-        _ = ener_fig.add_trace(
-            go.Scatter(
-                x=y_test,
-                y=y_pred,
-                text=test_df["plot_label"].tolist(),
-                mode="markers",
-                marker=dict(
-                    size=8,
-                    symbol=0,
-                    color=color_dict.get(column_value, "blue"),
-                    opacity=1,
-                ),
-                hoverinfo="x+y+text",
-                showlegend=True,
-                name=column_value.title(),
-            ),
-        )
+#         # Plot energy data points
+#         _ = ener_fig.add_trace(
+#             go.Scatter(
+#                 x=y_test,
+#                 y=y_pred,
+#                 text=test_df["plot_label"].tolist(),
+#                 mode="markers",
+#                 marker=dict(
+#                     size=8,
+#                     symbol=0,
+#                     color=color_dict.get(column_value, "blue"),
+#                     opacity=1,
+#                 ),
+#                 hoverinfo="x+y+text",
+#                 showlegend=True,
+#                 name=column_value.title(),
+#             ),
+#         )
 
-        # Add ideal fit line to plot
-        _ = ener_fig.add_trace(
-            go.Scatter(
-                x=plot_range,
-                y=plot_range,
-                mode="lines",
-                line=dict(color="rgb(0, 0, 0, 0.1)", width=2, dash="dash"),
-                hoverinfo="skip",
-                showlegend=False,
-            ),
-        )
+#         # Add ideal fit line to plot
+#         _ = ener_fig.add_trace(
+#             go.Scatter(
+#                 x=plot_range,
+#                 y=plot_range,
+#                 mode="lines",
+#                 line=dict(color="rgb(0, 0, 0, 0.1)", width=2, dash="dash"),
+#                 hoverinfo="skip",
+#                 showlegend=False,
+#             ),
+#         )
 
-        _ = ener_fig.add_annotation(
-            xanchor="left",
-            yanchor="top",
-            xref="paper",
-            yref="paper",
-            x=0,
-            y=1,
-            align="left",
-            text="R<sup>2</sup> = {:.3f}<br>RMSE = {:.3f}<br>MAE = {:.3f}".format(
-                rsquared, rmse, mae
-            ),
-            font_size=26,
-            font_family="Arial",
-            showarrow=False,
-            bgcolor="rgba(0,0,0,0.1)",
-        )
+#         _ = ener_fig.add_annotation(
+#             xanchor="left",
+#             yanchor="top",
+#             xref="paper",
+#             yref="paper",
+#             x=0,
+#             y=1,
+#             align="left",
+#             text="R<sup>2</sup> = {:.3f}<br>RMSE = {:.3f}<br>MAE = {:.3f}".format(
+#                 rsquared, rmse, mae
+#             ),
+#             font_size=26,
+#             font_family="Arial",
+#             showarrow=False,
+#             bgcolor="rgba(0,0,0,0.1)",
+#         )
 
-        _ = ener_fig.update_layout(energy_layout)
-        range_layout = go.Layout(xaxis_range=plot_range, yaxis_range=plot_range)
-        _ = ener_fig.update_layout(range_layout)
-        ener_figs.append(ener_fig)
+#         _ = ener_fig.update_layout(energy_layout)
+#         range_layout = go.Layout(xaxis_range=plot_range, yaxis_range=plot_range)
+#         _ = ener_fig.update_layout(range_layout)
+#         ener_figs.append(ener_fig)
 
-    return {
-        "ener_figs": ener_figs,
-        "rsquareds": rsquareds,
-        "rmses": rmses,
-        "maes": maes,
-    }
+#     return {
+#         "ener_figs": ener_figs,
+#         "rsquareds": rsquareds,
+#         "rmses": rmses,
+#         "maes": maes,
+#     }

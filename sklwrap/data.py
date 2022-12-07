@@ -4,23 +4,7 @@ from sklearn.svm import SVR
 
 N_SPLITS = 5
 
-# TODO: Create function that returns color, either for a single one, or for a list. Might be much easier...
-color_dict = {
-    "Co": "navy",
-    "Rh": "sienna",
-    "Ir": "olive",
-    "Ni": "teal",
-    "Pd": "purple",
-    "Pt": "green",
-    "Cu": "blue",
-    "Ag": "brown",
-    "Au": "orange",
-    "Cd": "black",
-    "Os": "peachpuff",
-    "Fe": "peru",
-    "Zn": "salmon",
-    "Ru": "palegreen",
-}
+# ! Removed color_dict, as the color setup is something that should be done for each project.
 
 # TODO: Cannot put PCA/KernelPCA here, of course, because they don't implement predict.
 NEED_TO_STANDARDIZE = (
@@ -31,7 +15,7 @@ NEED_TO_STANDARDIZE = (
     SVR,
 )
 
-ridge_dict = {
+ridge_parameter_dict = {
     "alpha": 1.0,
     "fit_intercept": True,
     "normalize": False,
@@ -42,7 +26,7 @@ ridge_dict = {
     "random_state": 0,
 }
 
-lasso_dict = {
+lasso_parameter_dict = {
     "alpha": float("1e-5"),
     "fit_intercept": True,
     "normalize": False,
@@ -56,7 +40,7 @@ lasso_dict = {
     "selection": "cyclic",
 }
 
-en_dict = {
+en_parameter_dict = {
     "alpha": float("1e-3"),
     "copy_X": True,
     "fit_intercept": True,
@@ -71,7 +55,7 @@ en_dict = {
     "warm_start": True,
 }
 
-rf_dict = {
+rf_parameter_dict = {
     "bootstrap": True,
     "ccp_alpha": 0.0,
     "criterion": "squared_error",
@@ -92,7 +76,7 @@ rf_dict = {
     "warm_start": False,
 }
 
-svr_dict = {
+svr_parameter_dict = {
     "C": 1.0,
     "cache_size": 200,
     "coef0": 0.0,
@@ -105,64 +89,6 @@ svr_dict = {
     "tol": 0.001,
     "verbose": False,
 }
-
-# # Default figure layout for energy-figures
-# energy_layout = go.Layout(
-#     # Update global layout
-#     width=600,
-#     height=600,
-#     font=dict(family="Arial", color="black", size=26),
-#     margin=dict(
-#         l=0,
-#         r=0,
-#         b=0,
-#         t=0,
-#     ),
-#     hoverlabel={"namelength": -1},
-#     # title=dict(text=plot_title, x=0.5, ),
-#     paper_bgcolor="white",
-#     plot_bgcolor="white",
-#     legend=dict(
-#         xanchor="right",
-#         x=1,
-#         yanchor="bottom",
-#         y=0,
-#         bgcolor="rgba(0,0,0,0.1)",  # bordercolor='rgba(0,0,0,0.4)',
-#         font_size=26,
-#         tracegroupgap=2,
-#     ),
-#     xaxis=dict(
-#         title="E<sub>DFT</sub> / eV",
-#         title_font_size=30,
-#         showline=True,
-#         linewidth=3,
-#         linecolor="black",
-#         mirror=True,
-#         showgrid=False,
-#         zeroline=False,
-#         ticks="outside",
-#         tickfont_size=26,
-#         tickformat=".1f",
-#         tickwidth=3,
-#         ticklen=6,
-#     ),
-#     yaxis=dict(
-#         title="E<sub>pred</sub> / eV",
-#         title_font_size=30,
-#         showline=True,
-#         linewidth=3,
-#         linecolor="black",
-#         mirror=True,
-#         showgrid=False,
-#         zeroline=False,
-#         ticks="outside",
-#         tickfont_size=26,
-#         tickformat=".1f",
-#         tickwidth=3,
-#         ticklen=6,
-#     ),
-# )
-
 
 regr_layout = go.Layout(
     width=597,
@@ -217,7 +143,6 @@ regr_layout = go.Layout(
         ticklen=6,
     ),
 )
-
 
 pca_layout = go.Layout(
     width=600,
