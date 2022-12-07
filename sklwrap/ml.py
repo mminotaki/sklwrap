@@ -24,6 +24,168 @@ NEED_TO_STANDARDIZE = (
 )
 
 
+def run_regr(
+    df_in,
+    ml_model,
+    ml_features,
+    ml_target,
+    cv_setup={"cv_type": "kfold", "cv_spec": 5},
+):
+    # ! Don't evaluate the errors here??
+    df_func = df_in.copy(deep=True)
+    num_rows = df_func.shape[0]
+    y_full = df_func[ml_target].values
+
+    # Initialize all the empty lists that hold all the data for the return dictionary.
+    ml_models = []
+    scalers = []
+
+    rmse_trains, rmse_tests, rmse_fulls = [], [], []
+    mae_trains, mae_tests, mae_fulls = [], [], []
+    rsquared_trains, rsquared_tests, rsquared_fulls = [], [], []
+
+    # Add splitting indices to Dataframe based on K-Fold or LOGOCV. Could externalize this as function.
+    # This is done so that they can be treated with the same footing later on when the data is standardized and the models are trained.
+    # TODO: Move this to a separate function.
+    if cv_setup["cv_type"].lower() == "kfold":
+        split_column_number = cv_setup["cv_spec"]
+        split_array = np.full((num_rows, split_column_number), False)
+
+        kf = KFold(n_splits=cv_setup["cv_spec"], shuffle=False)
+        for isplit, split in enumerate(kf.split(range(num_rows))):
+            train_indices, test_indices = split
+            split_array[[train_indices], isplit] = True
+
+    elif cv_setup["cv_type"].lower() == "logocv":
+        logocv_column = cv_setup["cv_spec"]
+        split_column_number = len(set(df_func[logocv_column]))
+        split_array = np.full((num_rows, split_column_number), False)
+        for ilogocv_value, logocv_value in enumerate(
+            set(df_func[logocv_column].values)
+        ):
+            split_array[:, ilogocv_value] = [
+                _ == logocv_value for _ in df_func[logocv_column].values
+            ]
+
+    elif cv_setup["cv_type"].lower() == "loocv":
+        raise NotImplementedError("LOOCV not implemented yet.")
+
+    split_column_names = ["train_{:05d}".format(i) for i in range(split_column_number)]
+    pred_column_names = ["pred_{:05d}".format(i) for i in range(split_column_number)]
+
+    df_bool = pd.DataFrame(
+        data=split_array, columns=split_column_names, index=df_func.index
+    )
+    df_func = pd.concat([df_func, df_bool], axis=1)
+    y_pred_arrays = []
+
+    for split_column_name, pred_column_name in list(
+        zip(split_column_names, pred_column_names)
+    ):
+
+        split_column_bool = df_func[split_column_name].values
+        # print('split_column_name', split_column_name)
+
+        df_train = df_func[split_column_bool].copy(deep=True)
+        df_test = df_func[np.logical_not(split_column_bool)].copy(deep=True)
+
+        x_train = df_train[ml_features].values
+        x_test = df_test[ml_features].values
+        y_train = df_train[ml_target].values
+        y_test = df_test[ml_target].values
+
+        # Standardization within data splitting to avoid data leakage from testing data.
+        if isinstance(ml_model, NEED_TO_STANDARDIZE):
+            train_scaler = StandardScaler().fit(x_train)
+            x_train = train_scaler.transform(x_train)
+            x_test = train_scaler.transform(x_test)
+
+        # TODO: Maybe it'll work the same way, by just feeding a pipeline? Insert data standardization into pipeline???
+        # if isinstance(ml_model, Pipeline):
+        #     print("Your ML model is a pipeline. I expect data standardization to be in the pipeline, if it is needed.")
+
+        # Fit and predict
+        _ = ml_model.fit(x_train, y_train)
+        y_train_pred, y_test_pred = ml_model.predict(x_train), ml_model.predict(x_test)
+
+        # ! Using np.concatenate will always put the test values behind the train values.
+        # y_full_pred = np.concatenate([y_train_pred, y_test_pred])
+
+        df_train[pred_column_name] = y_train_pred
+        df_test[pred_column_name] = y_test_pred
+
+        df_pred_full = pd.concat([df_train, df_test]).sort_index()
+
+        # ! Use pd.DataFrame to merge on index and keep ordering, however, in the end just need the pred column.
+        y_pred_ordered = df_pred_full[pred_column_name].values
+        y_pred_arrays.append(y_pred_ordered)
+
+        rmse_train = mean_squared_error(y_train, y_train_pred, squared=False)
+        rmse_test = mean_squared_error(y_test, y_test_pred, squared=False)
+        rmse_full = mean_squared_error(y_full, y_pred_ordered, squared=False)
+        mae_train = mean_absolute_error(y_train, y_train_pred)
+        mae_test = mean_absolute_error(y_test, y_test_pred)
+        mae_full = mean_absolute_error(y_full, y_pred_ordered)
+        rsquared_train = r2_score(y_train, y_train_pred)
+        rsquared_test = r2_score(y_test, y_test_pred)
+        rsquared_full = r2_score(y_full, y_pred_ordered)
+
+        ml_models.append(ml_model)
+        rmse_trains.append(rmse_train)
+        rmse_tests.append(rmse_test)
+        rmse_fulls.append(rmse_full)
+        mae_trains.append(mae_train)
+        mae_tests.append(mae_test)
+        mae_fulls.append(mae_full)
+        rsquared_trains.append(rsquared_train)
+        rsquared_tests.append(rsquared_test)
+        rsquared_fulls.append(rsquared_full)
+
+    # Concatenate the sorted predictions into df_func.
+    df_func = pd.concat(
+        [
+            df_func,
+            pd.DataFrame(data=np.array(y_pred_arrays).T, columns=pred_column_names),
+        ],
+        axis=1,
+    )
+
+    df_func = df_func.rename(columns={ml_target: "y"})
+
+    # ! Visualisation for development.
+    # for split_column_name, pred_column_name in list(zip(split_column_names, pred_column_names)):
+    #     print(split_column_name, pred_column_name)
+    #     fig = px.scatter(df_func, x="mV", y=pred_column_name, color=split_column_name)
+    #     _ = fig.update_layout(regr_layout)
+    #     x_range = df_func["mV"].min(), df_func["mV"].max()
+    #     x_range_ext = (x_range[0] - 0.075*np.ptp(x_range), x_range[1] + 0.075*np.ptp(x_range))
+    #     _ = fig.update_xaxes(range=x_range_ext)
+    #     fig.show()
+
+    error_dict = {
+        "rmse_trains": rmse_trains,
+        "rmse_tests": rmse_tests,
+        "rmse_fulls": rmse_fulls,
+        "mae_trains": mae_trains,
+        "mae_tests": mae_tests,
+        "mae_fulls": mae_fulls,
+        "rsquared_trains": rsquared_trains,
+        "rsquared_tests": rsquared_tests,
+        "rsquared_fulls": rsquared_fulls,
+    }
+
+    best_id = "{0:05d}".format(np.argmin(rmse_tests))
+
+    return {
+        "df_in": df_func,
+        "cv_setup": cv_setup,
+        "ml_models": ml_models,
+        "scalers": scalers,
+        "error_dict": error_dict,
+        "best_id": best_id,
+    }
+
+
 # def add_split_columns(
 
 # ):
