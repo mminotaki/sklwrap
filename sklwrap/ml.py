@@ -13,7 +13,7 @@ from tqdm import trange
 
 # from .data import *
 # from .misc import apply_feat_mask
-# from .vis import plot_energies, plot_errors
+from .vis import plot_errors, plot_regr
 
 NEED_TO_STANDARDIZE = (
     LinearRegression,
@@ -99,6 +99,7 @@ def run_regr(
             train_scaler = StandardScaler().fit(x_train)
             x_train = train_scaler.transform(x_train)
             x_test = train_scaler.transform(x_test)
+            scalers.append(train_scaler)
 
         # TODO: Maybe it'll work the same way, by just feeding a pipeline? Insert data standardization into pipeline???
         # if isinstance(ml_model, Pipeline):
@@ -186,125 +187,115 @@ def run_regr(
     }
 
 
-# def add_split_columns(
+def vary_ml_param(
+    df_in,
+    ml_base_model,
+    ml_features,
+    ml_target,
+    ml_param_dict,
+    cv_setup=None,
+    color_setup=None,  # ! Copy-paste passing to plot_regr from outside. Must be improved.
+    *args,
+    **kwargs,
+):
 
-# ):
-#     pass
+    # Missing: Descriptor figure and number of features list/figure.
+    return_dict = {}
 
+    # coefs, numfeatures, models, rmses, y_preds, rsquareds = [], [], [], [], [], []
 
-# def vary_ml_param(
-#     df_in,
-#     ml_base_model,
-#     ml_features,
-#     ml_target,
-#     ml_param_dict,
-#     cv_type="kfold",
-#     n_splits=5,
-#     verbose=False,
-# ):
+    counter = 0
+    ml_models, test_rmses, regr_runs = [], [], []
+    ml_param_values = list(ml_param_dict.values())[0]
+    errors_array = np.zeros(shape=(len(ml_param_values), 9))
 
-#     # Missing: Descriptor figure and number of features list/figure.
-#     return_dict = {}
+    for ml_param_value in ml_param_values:
 
-#     # coefs, numfeatures, models, rmses, y_preds, rsquareds = [], [], [], [], [], []
+        ml_mod_model = copy.deepcopy(
+            ml_base_model.set_params(**{list(ml_param_dict.keys())[0]: ml_param_value})
+        )
 
-#     counter = 0
-#     ml_models, test_rmses, feature_coefs = [], [], []
-#     ml_param_values = list(ml_param_dict.values())[0]
-#     errors_array = np.zeros(shape=(len(ml_param_values), 9))
+        ml_param_run = run_regr(
+            df_in=df_in,
+            ml_model=ml_mod_model,
+            ml_features=ml_features,
+            ml_target=ml_target,
+            cv_setup=cv_setup,
+        )
 
-#     for ml_param_value in ml_param_values:
+        regr_runs.append(ml_param_run)
+        ml_param_model = ml_param_run["ml_models"][int(ml_param_run["best_id"])]
+        error_dict = ml_param_run["error_dict"]
+        ml_models.append(ml_param_model)
 
-#         ml_mod_model = copy.deepcopy(
-#             ml_base_model.set_params(**{list(ml_param_dict.keys())[0]: ml_param_value})
-#         )
+        # If before full CV done, average the errors.
+        for error_dict_key in list(error_dict.keys()):
+            error_dict[error_dict_key] = [np.mean(error_dict[error_dict_key])]
 
-#         ml_param_run = run_regr(
-#             df_in=df_in,
-#             ml_model=ml_mod_model,
-#             ml_features=ml_features,
-#             ml_target=ml_target,
-#             cv_type=cv_type,
-#             n_splits=n_splits,
-#         )
+        test_rmses.append(error_dict["rmse_tests"][0])
 
-#         ml_param_model = ml_param_run["ml_models"][ml_param_run["best_id"]]
-#         error_dict = ml_param_run["error_dict"]
-#         result_dict = ml_param_run["result_dict"]
+        errors_array[counter, :] = [
+            error_dict_value[0] for error_dict_value in list(error_dict.values())
+        ]
 
-#         ml_models.append(ml_param_model)
+        counter += 1
 
-#         # If before full CV done, average the errors.
-#         for error_dict_key in list(error_dict.keys()):
-#             error_dict[error_dict_key] = [np.mean(error_dict[error_dict_key])]
+    best_id = np.argmin(test_rmses)
 
-#         test_rmses.append(error_dict["rmse_tests"][0])
+    return_dict["ml_models"] = ml_models
+    return_dict["best_id"] = best_id
+    return_dict["best_param"] = ml_param_values[best_id]
+    return_dict["test_rmses"] = test_rmses
+    return_dict["regr_runs"] = regr_runs
 
-#         errors_array[counter, :] = [
-#             error_dict_value[0] for error_dict_value in list(error_dict.values())
-#         ]
+    best_model = ml_models[best_id]
 
-#         counter += 1
+    if len(ml_param_values) == 1:
+        best_model_run = ml_param_run
+    else:
+        best_model_run = run_regr(
+            df_in=df_in,
+            ml_model=best_model,
+            ml_features=ml_features,
+            ml_target=ml_target,
+            cv_setup=cv_setup,
+        )
 
-#     best_id = np.argmin(test_rmses)
+    # Create energy plots
+    # This could now also be done outside. Return just best model and plot the result of best model fit.
+    # However, for convenience reasons do it here.
 
-#     return_dict["ml_models"] = ml_models
-#     return_dict["best_id"] = best_id
-#     return_dict["best_param"] = ml_param_values[best_id]
-#     return_dict["test_rmses"] = test_rmses
+    regr_figs = plot_regr(
+        regr_dict=best_model_run,
+        color_setup=color_setup,
+        regr_layout=kwargs.get("regr_layout", None),
+    )
 
-#     best_model = ml_models[best_id]
+    error_headers = [error_key.replace("_", "s_") for error_key in error_dict.keys()]
+    errors_dict = {
+        key: value for key, value in zip(error_headers, errors_array.transpose())
+    }
 
-#     if len(ml_param_values) == 1:
-#         best_model_run = ml_param_run
-#     else:
-#         best_model_run = run_regr(
-#             df_in=df_in,
-#             ml_model=best_model,
-#             ml_features=ml_features,
-#             ml_target=ml_target,
-#             cv_type=cv_type,
-#             n_splits=n_splits,
-#         )
+    error_fig = plot_errors(
+        error_dict=errors_dict,
+        x_values=ml_param_values,
+        plot_measures=[
+            "rmses_trains",
+            "rmses_tests",
+            "rsquareds_trains",
+            "rsquareds_tests",
+            "maes_trains",
+            "maes_tests",
+        ],
+        annot_text=[""] * len(ml_param_values),
+        x_title=list(ml_param_dict.keys())[0],
+    )
 
-#     # Create energy plots
-#     # This could now also be done outside. Return just best model and plot the result of best model fit.
-#     # However, for convenience reasons do it here.
-#     # TODO: Generalize this to any column name that should be plotted...
+    return_dict["regr_figs"] = regr_figs
+    return_dict["error_fig"] = error_fig
+    return_dict["error_dict"] = errors_dict
 
-#     ener_fig = plot_energies(
-#         result_dict=best_model_run["result_dict"],
-#         error_dict=best_model_run["error_dict"],
-#     )
-
-#     return_dict["ener_fig"] = ener_fig
-
-#     error_headers = [error_key.replace("_", "s_") for error_key in error_dict.keys()]
-#     errors_dict = {
-#         key: value for key, value in zip(error_headers, errors_array.transpose())
-#     }
-
-#     error_fig = plot_errors(
-#         error_dict=errors_dict,
-#         x_values=ml_param_values,
-#         plot_measures=[
-#             "rmses_trains",
-#             "rmses_tests",
-#             "rsquareds_trains",
-#             "rsquareds_tests",
-#             "maes_trains",
-#             "maes_tests",
-#         ],
-#         annot_text=[""] * len(ml_param_values),
-#         x_title=list(ml_param_dict.keys())[0],
-#     )
-
-#     return_dict["error_fig"] = error_fig
-#     return_dict["errors_dict"] = errors_dict
-
-#     # return_dict['numfeat_fig'] = numfeat_fig
-
-#     return return_dict
+    return return_dict
 
 
 # @timecall
@@ -366,7 +357,7 @@ def run_regr(
 # def loocv_all_points(df_in, ml_model, ml_features, ml_target, column, plot_range):
 #     # TODO: Could adapt the other function such that it does the same. Keep somewhat duplicated code here.
 
-#     rsquareds, rmses, maes, ener_figs = [], [], [], []
+#     rsquareds, rmses, maes, regr_figs = [], [], [], []
 #     column_unique_vals = df_in[column].unique()
 
 #     for column_value in column_unique_vals:
@@ -459,10 +450,10 @@ def run_regr(
 #         _ = ener_fig.update_layout(energy_layout)
 #         range_layout = go.Layout(xaxis_range=plot_range, yaxis_range=plot_range)
 #         _ = ener_fig.update_layout(range_layout)
-#         ener_figs.append(ener_fig)
+#         regr_figs.append(ener_fig)
 
 #     return {
-#         "ener_figs": ener_figs,
+#         "regr_figs": regr_figs,
 #         "rsquareds": rsquareds,
 #         "rmses": rmses,
 #         "maes": maes,

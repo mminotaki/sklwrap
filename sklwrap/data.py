@@ -90,6 +90,8 @@ svr_parameter_dict = {
     "verbose": False,
 }
 
+
+# All these settings should not be in data.py but in project_settings.py
 regr_layout = go.Layout(
     width=597,
     height=597,
@@ -123,7 +125,9 @@ regr_layout = go.Layout(
         gridcolor="rgba(0,0,0,0.3)",
         ticks="outside",
         tickfont_size=26,
-        tickformat=".1f",
+        tickformat="d",
+        tick0=200,
+        dtick=200,
         tickwidth=3,
         ticklen=6,
     ),
@@ -138,7 +142,9 @@ regr_layout = go.Layout(
         gridcolor="rgba(0,0,0,0.3)",
         ticks="outside",
         tickfont_size=26,
-        tickformat=".1f",
+        tickformat="d",
+        tick0=200,
+        dtick=200,
         tickwidth=3,
         ticklen=6,
     ),
