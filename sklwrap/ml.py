@@ -1,4 +1,3 @@
-
 import copy
 from operator import itemgetter
 from typing import Type
@@ -91,7 +90,7 @@ def run_regr(
     ml_features,
     ml_target,
 ):
-
+    # print("DF IN: ", df_in.shape)
     # ! Don't evaluate the errors here??
     df_func = df_in.copy(deep=True)
     y_full = df_func[ml_target].values
@@ -142,12 +141,14 @@ def run_regr(
         _ = ml_model.fit(x_train, y_train)
         y_train_pred, y_test_pred = ml_model.predict(x_train), ml_model.predict(x_test)
 
-        # ! Using np.concatenate will always put the test values behind the train values.
+        # ! Using np.concatenate will always put the test values behind the train values -> Have to sort on index.
         # y_full_pred = np.concatenate([y_train_pred, y_test_pred])
 
         df_train[pred_column_name] = y_train_pred
         df_test[pred_column_name] = y_test_pred
 
+        # ! I don't want an additional "index" column, but I want to retain the indices...
+        # ! Don't sort on index, though, retain as is.
         df_pred_full = pd.concat([df_train, df_test]).sort_index()
 
         # ! Use pd.DataFrame to merge on index and keep ordering, however, in the end just need the pred column.
@@ -174,15 +175,12 @@ def run_regr(
         rsquared_trains.append(rsquared_train)
         rsquared_tests.append(rsquared_test)
         rsquared_fulls.append(rsquared_full)
+        # print("=" * 100)
 
     # Concatenate the sorted predictions into df_func.
-    df_func = pd.concat(
-        [
-            df_func,
-            pd.DataFrame(data=np.array(y_pred_arrays).T, columns=pred_column_names),
-        ],
-        axis=1,
-    )
+    # ! Must make sure that ordering does not get lost -> Just don't sort, but always preserve original ordering.
+    df_pred = pd.DataFrame(data=np.array(y_pred_arrays).T, columns=pred_column_names)
+    df_func = pd.concat([df_func, df_pred], axis=1)
 
     df_func = df_func.rename(columns={ml_target: "y"})
 
