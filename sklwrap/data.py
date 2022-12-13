@@ -64,7 +64,6 @@ rf_parameter_dict = {
     "max_leaf_nodes": None,
     "max_samples": None,
     "min_impurity_decrease": 0.0,
-    # "min_impurity_split": None,
     "min_samples_leaf": 1,
     "min_samples_split": 2,
     "min_weight_fraction_leaf": 0.0,
@@ -77,7 +76,7 @@ rf_parameter_dict = {
 }
 
 svr_parameter_dict = {
-    "C": 1.0,
+    "C": 100,
     "cache_size": 200,
     "coef0": 0.0,
     "degree": 3,
