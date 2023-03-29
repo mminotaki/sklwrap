@@ -36,10 +36,14 @@ def add_cv_columns(
         split_column_number = cv_setup["cv_spec"]
         split_array = np.full((num_rows, split_column_number), False)
 
-        kf = KFold(n_splits=cv_setup["cv_spec"], shuffle=False)
-        for isplit, split in enumerate(kf.split(range(num_rows))):
-            train_indices, test_indices = split
-            split_array[[train_indices], isplit] = True
+        try:
+            kf = KFold(n_splits=cv_setup["cv_spec"], shuffle=False)
+            for isplit, split in enumerate(kf.split(range(num_rows))):
+                train_indices, test_indices = split
+                split_array[[train_indices], isplit] = True
+        except ValueError:
+            # ! Case of not using splitting, but full data set
+            split_array = np.full((num_rows, split_column_number), True)
 
     elif cv_setup["cv_type"].lower() == "logocv":
         logocv_column = cv_setup["cv_spec"]
@@ -55,15 +59,15 @@ def add_cv_columns(
     elif cv_setup["cv_type"].lower() == "loocv":
         raise NotImplementedError("LOOCV not implemented yet.")
 
-    split_column_names = ["train_{:05d}".format(i) for i in range(split_column_number)]
+    train_column_names = ["train_{:05d}".format(i) for i in range(split_column_number)]
 
     # ! Currently overwriting not yet implemented.
-    if set(split_column_names) == set([_ for _ in df_func.columns]):
+    if set(train_column_names) == set([_ for _ in df_func.columns]):
         print(
             "Same number of training columns already in dataframe. Not changing anything."
         )
     else:
-        if split_column_names[0] in df_func.columns:
+        if train_column_names[0] in df_func.columns:
             print(
                 "Some training columns already in dataframe -> Overwrite: {}.".format(
                     overwrite
@@ -77,7 +81,7 @@ def add_cv_columns(
                 return df_func
 
         df_bool = pd.DataFrame(
-            data=split_array, columns=split_column_names, index=df_func.index
+            data=split_array, columns=train_column_names, index=df_func.index
         )
         df_func = pd.concat([df_func, df_bool], axis=1)
 
@@ -90,7 +94,6 @@ def run_regr(
     ml_features,
     ml_target,
 ):
-    # print("DF IN: ", df_in.shape)
     # ! Don't evaluate the errors here??
     df_func = df_in.copy(deep=True)
     y_full = df_func[ml_target].values
@@ -103,21 +106,35 @@ def run_regr(
     mae_trains, mae_tests, mae_fulls = [], [], []
     rsquared_trains, rsquared_tests, rsquared_fulls = [], [], []
 
-    split_column_names = [_ for _ in df_func.columns if _.startswith("train_")]
+    train_column_names = [col for col in df_func.columns if col.startswith("train_")]
+    # test_column_names = [col.replace("train_", "test_") for col in train_column_names]
+    # print(train_column_names)
+    if len(train_column_names) == 1:
+        no_cv = True
+    else:
+        no_cv = False
+
+    # print(test_column_names)
+
     pred_column_names = [
-        "pred_{:05d}".format(i) for i in range(len(split_column_names))
+        "pred_{:05d}".format(i) for i in range(len(train_column_names))
     ]
     y_pred_arrays = []
 
     for split_column_name, pred_column_name in list(
-        zip(split_column_names, pred_column_names)
+        zip(train_column_names, pred_column_names)
     ):
+        # print(split_column_name, pred_column_name)
 
         split_column_bool = df_func[split_column_name].values
         # print('split_column_name', split_column_name)
 
         df_train = df_func[split_column_bool].copy(deep=True)
-        df_test = df_func[np.logical_not(split_column_bool)].copy(deep=True)
+        # if df_train.shape[0] == df_func.shape[0]:
+        if no_cv is True:
+            df_test = df_train.copy(deep=True)
+        else:
+            df_test = df_func[np.logical_not(split_column_bool)].copy(deep=True)
 
         x_train = df_train[ml_features].values
         x_test = df_test[ml_features].values
@@ -147,9 +164,19 @@ def run_regr(
         df_train[pred_column_name] = y_train_pred
         df_test[pred_column_name] = y_test_pred
 
+        # print(list(df_train.columns))
+        # print(list(df_test.columns))
+
         # ! I don't want an additional "index" column, but I want to retain the indices...
         # ! Don't sort on index, though, retain as is.
-        df_pred_full = pd.concat([df_train, df_test]).sort_index()
+        if no_cv is False:
+            df_pred_full = pd.concat([df_train, df_test]).sort_index()
+        else:
+            # df_pred_full = df_train.copy(deep=True)
+            df_pred_full = df_test.copy(deep=True)
+
+        # print(df_train.head())
+        # print(df_test.head())
 
         # ! Use pd.DataFrame to merge on index and keep ordering, however, in the end just need the pred column.
         y_pred_ordered = df_pred_full[pred_column_name].values

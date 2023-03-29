@@ -2,6 +2,7 @@ import copy
 import itertools as it
 import math
 import os
+from typing import List
 
 import numpy as np
 import pandas as pd
@@ -13,7 +14,7 @@ from .data import *
 
 def plotly_to_image(
     plotly_fig: go.Figure,
-    path_elements: list[str],
+    path_elements: List[str],
     figure_name: str,
     save_types: list = ["png", "svg", "html"],
     paper: bool = False,
@@ -103,6 +104,7 @@ def plot_regr(
     which_error="mean",
     color_setup=None,  # This should be a dict with the key being the column name and the value being a color mapping:
     regr_layout=None,
+    text_column=None,
     *args,
     **kwargs,
 ):
@@ -235,7 +237,7 @@ def plot_regr(
                         ),
                         hoverinfo="text+x+y",
                         name="{}".format(column_value),
-                        # text=train_plot_text,
+                        text=column_train_df[text_column],
                         legendgroup="{}".format(column_value),
                         showlegend=kwargs.get("show_train_legend", True),
                     ),
@@ -257,7 +259,7 @@ def plot_regr(
                         ),
                         hoverinfo="text+x+y",
                         name="{}".format(column_value),
-                        # text=test_plot_text,
+                        text=column_test_df[text_column],
                         legendgroup="{}".format(column_value),
                         showlegend=kwargs.get("show_test_legend", True),
                     ),
