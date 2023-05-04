@@ -1,16 +1,13 @@
 import copy
-from operator import itemgetter
-from typing import Type
 
 import numpy as np
 import pandas as pd
-import plotly.graph_objs as go
 from sklearn.linear_model import ElasticNet, Lasso, LinearRegression, Ridge
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import KFold
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVR
-from tqdm import tqdm, trange
+from tqdm import tqdm
 
 from .vis import plot_errors, plot_regr
 
@@ -28,7 +25,6 @@ def add_cv_columns(
     cv_setup={"cv_type": "kfold", "cv_spec": 5},
     overwrite=False,
 ):
-
     df_func = df_in.copy(deep=True)
     num_rows = df_func.shape[0]
 
@@ -83,6 +79,11 @@ def add_cv_columns(
         df_bool = pd.DataFrame(
             data=split_array, columns=train_column_names, index=df_func.index
         )
+
+        # Hack
+        if cv_setup["cv_type"].lower() == "logocv":
+            df_bool = df_bool.applymap(lambda x: not x)
+
         df_func = pd.concat([df_func, df_bool], axis=1)
 
     return df_func
@@ -244,7 +245,6 @@ def vary_ml_param(
     *args,
     **kwargs,
 ):
-
     # Missing: Descriptor figure and number of features list/figure.
     return_dict = {}
 
@@ -256,7 +256,6 @@ def vary_ml_param(
     errors_array = np.zeros(shape=(len(ml_param_values), 9))
 
     for ml_param_value in tqdm(ml_param_values):
-
         ml_mod_model = copy.deepcopy(
             ml_base_model.set_params(**{list(ml_param_dict.keys())[0]: ml_param_value})
         )

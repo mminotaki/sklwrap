@@ -1,15 +1,30 @@
 import copy
-import itertools as it
-import math
 import os
 from typing import List
 
 import numpy as np
-import pandas as pd
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
 
 from .data import *
+
+# Get all the named CSS colors
+named_colors = [
+    "#1f77b4",  # muted blue
+    "#ff7f0e",  # safety orange
+    "#2ca02c",  # cooked asparagus green
+    "#d62728",  # brick red
+    "#9467bd",  # muted purple
+    "#8c564b",  # chestnut brown
+    "#e377c2",  # raspberry yogurt pink
+    "#7f7f7f",  # middle gray
+    "#bcbd22",  # curry yellow-green
+    "#17becf",  # blue-teal
+] * 10
+# named_colors.extend(
+#     [_ for _ in list(webcolors.CSS3_NAMES_TO_HEX.keys()) if "white" not in _]
+# )
+# print(named_colors)
 
 
 def plotly_to_image(
@@ -98,17 +113,17 @@ def plotly_to_image(
 
 def plot_regr(
     regr_dict,
+    color_column,
     show_train=True,
     show_test=True,
     set_range=None,
     which_error="mean",
-    color_setup=None,  # This should be a dict with the key being the column name and the value being a color mapping:
+    color_mapping=None,
     regr_layout=None,
     text_column=None,
     *args,
     **kwargs,
 ):
-
     # function_arguments = locals()
     # print(type(kwargs))
     # print(type(function_arguments))
@@ -119,20 +134,37 @@ def plot_regr(
     # TODO: Add possibility to provide specific colors. Had to remove that from the metal-color dict so that the code works general.
     # TODO: All plotly layout options using kwargs: `showticklabels`, `showlegend`, `label_column`
 
+    # # Print the color names and their corresponding hex values
+    # for color_name, hex_value in named_colors.items():
+    #     print(f"{color_name}: {hex_value}")
     error_dict = regr_dict["error_dict"]
 
     df_func = regr_dict["df_in"].copy(deep=True)
 
+    # if color_setup is None:
+    #     text_colum
+    #     color_setup = {}
+
     # ! At least color column needs to be set to something for the loop over the values later on.
     # ? Currently, using kwargs or the first column of the df to get a column to do the looping over.
-    if color_setup is None:
-        color_setup = {kwargs.get("split_col", df_func.columns[0]): {}}
 
-    color_column = list(color_setup.keys())[0]
-    color_mapping = list(color_setup.values())[0]
+    # color_setup = {k:v for k,v in }
+    # print(color_setup)
+
+    # color_column = list(color_setup.keys())[0]
+    # color_mapping = list(color_setup.values())[0]
 
     # ! Sort df so that legend items appear ordered -> Check that this does not mess up the ordering from input to pred values.
-    df_func = df_func.sort_values(by=color_column)
+    if color_column is not None:
+        color_column_values = sorted(list(set(df_func[color_column].values)))
+        color_mapping = {
+            k: v
+            for k, v in list(
+                zip(color_column_values, named_colors[0 : len(color_column_values)])
+            )
+        }
+
+        df_func = df_func.sort_values(by=color_column)
 
     regr_figs = []
 
@@ -140,7 +172,6 @@ def plot_regr(
     pred_columns = [col for col in df_func.columns if "pred" in col]
 
     for cv_id in range(len(error_dict["rmse_trains"])):
-
         cv_id_bool_column = bool_columns[int(cv_id)]
         cv_id_pred_column = pred_columns[int(cv_id)]
 
@@ -156,8 +187,64 @@ def plot_regr(
         # TODO: Implement this better
 
         # region
-        if which_error == "mean":
-            error_list = [
+        if which_error != "all":
+            if which_error == "mean":
+                error_list = [
+                    np.mean(error_dict["rsquared_tests"]),
+                    np.std(error_dict["rsquared_tests"]),
+                    np.mean(error_dict["rmse_tests"]),
+                    np.std(error_dict["rmse_tests"]),
+                    np.mean(error_dict["mae_tests"]),
+                    np.std(error_dict["mae_tests"]),
+                ]
+            elif which_error == "best":
+                error_list = [
+                    np.max(error_dict["rsquared_tests"]),
+                    np.std(error_dict["rsquared_tests"]),
+                    np.min(error_dict["rmse_tests"]),
+                    np.std(error_dict["rmse_tests"]),
+                    np.min(error_dict["mae_tests"]),
+                    np.std(error_dict["mae_tests"]),
+                ]
+            elif which_error == "full_mean":
+                error_list = [
+                    np.mean(error_dict["rsquared_fulls"]),
+                    np.std(error_dict["rsquared_fulls"]),
+                    np.mean(error_dict["rmse_fulls"]),
+                    np.std(error_dict["rmse_fulls"]),
+                    np.mean(error_dict["mae_fulls"]),
+                    np.std(error_dict["mae_fulls"]),
+                ]
+            elif which_error == "full_best":
+                error_list = [
+                    np.max(error_dict["rsquared_fulls"]),
+                    np.std(error_dict["rsquared_fulls"]),
+                    np.min(error_dict["rmse_fulls"]),
+                    np.std(error_dict["rmse_fulls"]),
+                    np.min(error_dict["mae_fulls"]),
+                    np.std(error_dict["mae_fulls"]),
+                ]
+            else:
+                raise KeyError("Invalid error specification used.")
+            # endregion
+
+            error_text = "R<sup>2</sup> = {:.3f} &#177; {:.3f}<br>RMSE = {:.3f} &#177; {:.3f}<br>MAE = {:.3f} &#177; {:.3f}".format(
+                *error_list
+            )
+
+        else:
+            error_list_train = [
+                np.mean(error_dict["rsquared_trains"]),
+                np.std(error_dict["rsquared_trains"]),
+                np.mean(error_dict["rmse_trains"]),
+                np.std(error_dict["rmse_trains"]),
+                np.mean(error_dict["mae_trains"]),
+                np.std(error_dict["mae_trains"]),
+            ]
+            error_text = "Train:<br>R<sup>2</sup> = {:.2f} &#177; {:.2f}<br>RMSE = {:.2f} &#177; {:.2f}<br>MAE = {:.2f} &#177; {:.2f}".format(
+                *error_list_train
+            )
+            error_list_test = [
                 np.mean(error_dict["rsquared_tests"]),
                 np.std(error_dict["rsquared_tests"]),
                 np.mean(error_dict["rmse_tests"]),
@@ -165,40 +252,10 @@ def plot_regr(
                 np.mean(error_dict["mae_tests"]),
                 np.std(error_dict["mae_tests"]),
             ]
-        elif which_error == "best":
-            error_list = [
-                np.max(error_dict["rsquared_tests"]),
-                np.std(error_dict["rsquared_tests"]),
-                np.min(error_dict["rmse_tests"]),
-                np.std(error_dict["rmse_tests"]),
-                np.min(error_dict["mae_tests"]),
-                np.std(error_dict["mae_tests"]),
-            ]
-        elif which_error == "full_mean":
-            error_list = [
-                np.mean(error_dict["rsquared_fulls"]),
-                np.std(error_dict["rsquared_fulls"]),
-                np.mean(error_dict["rmse_fulls"]),
-                np.std(error_dict["rmse_fulls"]),
-                np.mean(error_dict["mae_fulls"]),
-                np.std(error_dict["mae_fulls"]),
-            ]
-        elif which_error == "full_best":
-            error_list = [
-                np.max(error_dict["rsquared_fulls"]),
-                np.std(error_dict["rsquared_fulls"]),
-                np.min(error_dict["rmse_fulls"]),
-                np.std(error_dict["rmse_fulls"]),
-                np.min(error_dict["mae_fulls"]),
-                np.std(error_dict["mae_fulls"]),
-            ]
-        else:
-            raise KeyError("Invalid error specification used.")
-        # endregion
 
-        error_text = "R<sup>2</sup> = {:.3f} &#177; {:.3f}<br>RMSE = {:.3f} &#177; {:.3f}<br>MAE = {:.3f} &#177; {:.3f}".format(
-            *error_list
-        )
+            error_text += "<br>Test:<br>R<sup>2</sup> = {:.2f} &#177; {:.2f}<br>RMSE = {:.2f} &#177; {:.2f}<br>MAE = {:.2f} &#177; {:.2f}".format(
+                *error_list_test
+            )
 
         _ = regr_fig.add_annotation(
             xanchor="left",
@@ -224,6 +281,11 @@ def plot_regr(
         if show_train is True:
             for column_value in df_train[color_column].unique():
                 column_train_df = df_train.loc[df_train[color_column] == column_value]
+                if text_column is not None:
+                    plot_text = column_train_df[text_column]
+                else:
+                    plot_text = [""] * column_train_df.shape[0]
+                ###
                 _ = regr_fig.add_trace(
                     go.Scatter(
                         x=column_train_df["y"],
@@ -237,7 +299,7 @@ def plot_regr(
                         ),
                         hoverinfo="text+x+y",
                         name="{}".format(column_value),
-                        text=column_train_df[text_column],
+                        text=plot_text,
                         legendgroup="{}".format(column_value),
                         showlegend=kwargs.get("show_train_legend", True),
                     ),
@@ -246,6 +308,11 @@ def plot_regr(
         if show_test is True:
             for column_value in df_test[color_column].unique():
                 column_test_df = df_test.loc[df_test[color_column] == column_value]
+                if text_column is not None:
+                    plot_text = column_test_df[text_column]
+                else:
+                    plot_text = "" * column_test_df.shape[0]
+                ###
                 _ = regr_fig.add_trace(
                     go.Scatter(
                         x=column_test_df["y"],
@@ -259,9 +326,9 @@ def plot_regr(
                         ),
                         hoverinfo="text+x+y",
                         name="{}".format(column_value),
-                        text=column_test_df[text_column],
+                        text=plot_text,
                         legendgroup="{}".format(column_value),
-                        showlegend=kwargs.get("show_test_legend", True),
+                        showlegend=kwargs.get("show_test_legend", False),
                     ),
                 )
 
