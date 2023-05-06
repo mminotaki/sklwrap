@@ -24,22 +24,45 @@ def add_cv_columns(
     df_in,
     cv_setup={"cv_type": "kfold", "cv_spec": 5},
     overwrite=False,
+    retain_setup=None,
 ):
+    """Add train and test indices as boolean columnns with train_x headers to dataframe.
+
+    Args:
+        df_in (pd.DataFrame): DataFrame to which the data splitting should be applied.
+        cv_setup (dict, optional): Cross-validation setup. Either kfold or logocv. Defaults to {"cv_type": "kfold", "cv_spec": 5}.
+        overwrite (bool, optional): If train columns that already exist in the DataFrame should be overwritten. Defaults to False.
+        retain_setup (dict, optional): If n highest/lowest data points of one column should be retained in the training data. Setup for example: {"column": target, "ascending": False, "retain_where": train, "number": 2}. Defaults to None.
+
+    Raises:
+        NotImplementedError: If cv_setup not implemented.
+
+    Returns:
+        pd.DataFrame: DataFrame with train_x columns added.
+
+    TODO:
+        Replace number in retain setup with slice?
+    """
     df_func = df_in.copy(deep=True)
+
+    if retain_setup is not None:
+        df_func = df_func.sort_values(
+            by=retain_setup["column"], ascending=retain_setup["ascending"]
+        )
+        df_retain = df_func.head(retain_setup["number"])
+        df_func = df_func.iloc[retain_setup["number"] :]
+        df_func = df_func.sample(frac=1, random_state=42)
+
     num_rows = df_func.shape[0]
 
     if cv_setup["cv_type"].lower() == "kfold":
         split_column_number = cv_setup["cv_spec"]
         split_array = np.full((num_rows, split_column_number), False)
 
-        try:
-            kf = KFold(n_splits=cv_setup["cv_spec"], shuffle=False)
-            for isplit, split in enumerate(kf.split(range(num_rows))):
-                train_indices, test_indices = split
-                split_array[[train_indices], isplit] = True
-        except ValueError:
-            # ! Case of not using splitting, but full data set
-            split_array = np.full((num_rows, split_column_number), True)
+        kf = KFold(n_splits=cv_setup["cv_spec"], shuffle=False)
+        for isplit, split in enumerate(kf.split(range(num_rows))):
+            train_indices, test_indices = split
+            split_array[[train_indices], isplit] = True
 
     elif cv_setup["cv_type"].lower() == "logocv":
         logocv_column = cv_setup["cv_spec"]
@@ -55,15 +78,15 @@ def add_cv_columns(
     elif cv_setup["cv_type"].lower() == "loocv":
         raise NotImplementedError("LOOCV not implemented yet.")
 
-    train_column_names = ["train_{:05d}".format(i) for i in range(split_column_number)]
+    split_column_names = ["train_{:05d}".format(i) for i in range(split_column_number)]
 
     # ! Currently overwriting not yet implemented.
-    if set(train_column_names) == set([_ for _ in df_func.columns]):
+    if set(split_column_names) == set([_ for _ in df_func.columns]):
         print(
             "Same number of training columns already in dataframe. Not changing anything."
         )
     else:
-        if train_column_names[0] in df_func.columns:
+        if split_column_names[0] in df_func.columns:
             print(
                 "Some training columns already in dataframe -> Overwrite: {}.".format(
                     overwrite
@@ -77,14 +100,24 @@ def add_cv_columns(
                 return df_func
 
         df_bool = pd.DataFrame(
-            data=split_array, columns=train_column_names, index=df_func.index
+            data=split_array, columns=split_column_names, index=df_func.index
         )
-
-        # Hack
-        if cv_setup["cv_type"].lower() == "logocv":
-            df_bool = df_bool.applymap(lambda x: not x)
-
         df_func = pd.concat([df_func, df_bool], axis=1)
+
+    if retain_setup is not None:
+        if retain_setup["retain_where"].lower() == "train":
+            fill_value = True
+        elif retain_setup["retain_where"].lower() == "test":
+            fill_value = False
+        retain_bool_array = np.full(
+            shape=(retain_setup["number"], split_column_number), fill_value=fill_value
+        )
+        df_bool_retain = pd.DataFrame(
+            data=retain_bool_array, columns=split_column_names, index=df_retain.index
+        )
+        df_retain = pd.concat([df_retain, df_bool_retain], axis=1)
+
+        df_func = pd.concat([df_func, df_retain], ignore_index=True)
 
     return df_func
 
