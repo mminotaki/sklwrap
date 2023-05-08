@@ -156,7 +156,9 @@ def plot_regr(
 
     # ! Sort df so that legend items appear ordered -> Check that this does not mess up the ordering from input to pred values.
     if color_column is not None:
-        color_column_values = sorted(list(set(df_func[color_column].values)))
+        # TODO: Make verbose here to print if
+        df_func = df_func.dropna(subset=[color_column])
+        color_column_values = sorted(list(set(list(df_func[color_column].values))))
         color_mapping = {
             k: v
             for k, v in list(
