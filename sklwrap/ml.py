@@ -129,7 +129,7 @@ def run_regr(
     ml_target,
 ):
     # ! Don't evaluate the errors here??
-    df_func = df_in.copy(deep=True)
+    df_func = df_in[ml_features + [ml_target]].copy(deep=True)
     y_full = df_func[ml_target].values
 
     # Initialize all the empty lists that hold all the data for the return dictionary.
@@ -264,7 +264,7 @@ def run_regr(
         "ml_models": ml_models,
         "scalers": scalers,
         "error_dict": error_dict,
-        "best_id": best_id,
+        "best_id": int(best_id),
     }
 
 
