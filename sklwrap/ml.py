@@ -128,8 +128,9 @@ def run_regr(
     ml_features,
     ml_target,
 ):
-    # ! Don't evaluate the errors here??
-    df_func = df_in[ml_features + [ml_target]].copy(deep=True)
+    # ! Don't filter down df columns here, as they might be needed for plotting later.
+    # df_func = df_in[ml_features + [ml_target] + train_column_names].copy(deep=True)
+    df_func = df_in.copy(deep=True)
     y_full = df_func[ml_target].values
 
     # Initialize all the empty lists that hold all the data for the return dictionary.
@@ -142,7 +143,7 @@ def run_regr(
 
     train_column_names = [col for col in df_func.columns if col.startswith("train_")]
     # test_column_names = [col.replace("train_", "test_") for col in train_column_names]
-    # print(train_column_names)
+    # ? How can I actually use this???
     if len(train_column_names) == 1:
         no_cv = True
     else:
@@ -239,7 +240,6 @@ def run_regr(
         # print("=" * 100)
 
     # Concatenate the sorted predictions into df_func.
-    # ! Must make sure that ordering does not get lost -> Just don't sort, but always preserve original ordering.
     df_pred = pd.DataFrame(data=np.array(y_pred_arrays).T, columns=pred_column_names)
     df_func = pd.concat([df_func, df_pred], axis=1)
 
