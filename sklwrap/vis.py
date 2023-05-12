@@ -21,6 +21,7 @@ named_colors = [
     "#bcbd22",  # curry yellow-green
     "#17becf",  # blue-teal
 ] * 10
+default_blue = "#636EFA"
 # named_colors.extend(
 #     [_ for _ in list(webcolors.CSS3_NAMES_TO_HEX.keys()) if "white" not in _]
 # )
@@ -113,12 +114,12 @@ def plotly_to_image(
 
 def plot_regr(
     regr_dict,
-    color_column,
+    color_column,  # ! Make None as default, and possible. Currently breaks
     show_train=True,
     show_test=True,
     set_range=None,
     which_error="mean",
-    color_mapping=None,
+    color_mapping: dict = {},
     regr_layout=None,
     text_column=None,
     *args,
@@ -159,12 +160,13 @@ def plot_regr(
         # TODO: Make verbose here to print if
         df_func = df_func.dropna(subset=[color_column])
         color_column_values = sorted(list(set(list(df_func[color_column].values))))
-        color_mapping = {
-            k: v
-            for k, v in list(
-                zip(color_column_values, named_colors[0 : len(color_column_values)])
-            )
-        }
+        if color_mapping is None:
+            color_mapping = {
+                k: v
+                for k, v in list(
+                    zip(color_column_values, named_colors[0 : len(color_column_values)])
+                )
+            }
 
         df_func = df_func.sort_values(by=color_column)
 
@@ -297,7 +299,7 @@ def plot_regr(
                             size=8,
                             symbol=0,
                             opacity=1,
-                            color=color_mapping.get(column_value, "black"),
+                            color=color_mapping.get(column_value, default_blue),
                         ),
                         hoverinfo="text+x+y",
                         name="{}".format(column_value),
@@ -324,7 +326,7 @@ def plot_regr(
                             size=8,
                             symbol=4,
                             opacity=1,
-                            color=color_mapping.get(column_value, "black"),
+                            color=color_mapping.get(column_value, default_blue),
                         ),
                         hoverinfo="text+x+y",
                         name="{}".format(column_value),
