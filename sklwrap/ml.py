@@ -128,6 +128,7 @@ def run_regr(
     ml_features,
     ml_target,
 ):
+    # ? Only works for single target
     # ! Don't filter down df columns here, as they might be needed for plotting later.
     # df_func = df_in[ml_features + [ml_target] + train_column_names].copy(deep=True)
     df_func = df_in.copy(deep=True)
@@ -272,7 +273,7 @@ def vary_ml_param(
     df_in,
     ml_base_model,
     ml_features,
-    ml_target,
+    ml_targets,
     ml_param_dict,
     color_setup=None,  # ! Copy-paste passing to plot_regr from outside. Must be improved.
     *args,
@@ -287,6 +288,12 @@ def vary_ml_param(
     ml_models, test_rmses, regr_runs = [], [], []
     ml_param_values = list(ml_param_dict.values())[0]
     errors_array = np.zeros(shape=(len(ml_param_values), 9))
+
+    # ! Hack to make it work with the same syntax now.
+    if isinstance(ml_targets, list):
+        ml_target = ml_targets[0]
+    else:
+        ml_target = ml_targets
 
     for ml_param_value in tqdm(ml_param_values):
         ml_mod_model = copy.deepcopy(

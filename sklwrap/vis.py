@@ -28,6 +28,23 @@ default_blue = "#636EFA"
 # print(named_colors)
 
 
+def get_color_column(df_in):
+    min_unique_values = float("inf")  # Start with infinity
+    column_min_unique_values = None  # Initialize to None
+
+    # Loop over the columns
+    for col in df_in.columns:
+        num_unique_values = df_in[
+            col
+        ].nunique()  # Get the number of unique values in the column
+        # If the number of unique values in this column is less than the minimum so far
+        if num_unique_values < min_unique_values:
+            min_unique_values = num_unique_values
+            column_min_unique_values = col
+
+    return column_min_unique_values
+
+
 def plotly_to_image(
     plotly_fig: go.Figure,
     path_elements: List[str],
@@ -114,7 +131,7 @@ def plotly_to_image(
 
 def plot_regr(
     regr_dict,
-    color_column,  # ! Make None as default, and possible. Currently breaks
+    color_column=None,  # ! Make None as default, and possible. Currently breaks
     show_train=True,
     show_test=True,
     set_range=None,
@@ -126,6 +143,7 @@ def plot_regr(
     **kwargs,
 ):
     # function_arguments = locals()
+
     # print(type(kwargs))
     # print(type(function_arguments))
     # print(function_arguments.keys())
@@ -156,19 +174,22 @@ def plot_regr(
     # color_mapping = list(color_setup.values())[0]
 
     # ! Sort df so that legend items appear ordered -> Check that this does not mess up the ordering from input to pred values.
-    if color_column is not None:
-        # TODO: Make verbose here to print if
-        df_func = df_func.dropna(subset=[color_column])
-        color_column_values = sorted(list(set(list(df_func[color_column].values))))
-        if color_mapping is None:
-            color_mapping = {
-                k: v
-                for k, v in list(
-                    zip(color_column_values, named_colors[0 : len(color_column_values)])
-                )
-            }
+    if color_column is None:
+        # ! Cheap hack so that the column with the least number of values is used.
+        color_column = get_color_column(df_func)
 
-        df_func = df_func.sort_values(by=color_column)
+    # TODO: Make verbose here to print if
+    df_func = df_func.dropna(subset=[color_column])
+    color_column_values = sorted(list(set(list(df_func[color_column].values))))
+    if color_mapping is None:
+        color_mapping = {
+            k: v
+            for k, v in list(
+                zip(color_column_values, named_colors[0 : len(color_column_values)])
+            )
+        }
+
+    df_func = df_func.sort_values(by=color_column)
 
     regr_figs = []
 
@@ -414,10 +435,12 @@ def plot_errors(
 
         _ = error_fig.add_trace(
             go.Scatter(
-                x=list(x_values),
-                y=error_dict[
-                    plot_measure
-                ],  # [round(_, 2) for _ in error_dict[plot_measure]] # TODO: Round numbers shown on hover (but not for plotting).
+                x=list(x_values.astype(float).round(2)),
+                # y=error_dict[
+                #     plot_measure
+                # ],
+                y=np.array(error_dict[plot_measure]).astype(float).round(2),
+                # TODO: Round numbers shown on hover (but not for plotting).
                 mode="lines",
                 name=line_name,
                 line=dict(
@@ -442,7 +465,7 @@ def plot_errors(
             _ = error_fig.add_trace(
                 go.Scatter(
                     # x=list(range(1, error_array.shape[0])),
-                    x=list(x_values),
+                    x=list(x_values.astype(float).round(2)),
                     y=error_dict[plot_measure],
                     mode="lines",
                     name="RMSE (train)",
