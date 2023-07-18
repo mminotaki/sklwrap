@@ -74,6 +74,8 @@ def add_cv_columns(
             split_array[:, ilogocv_value] = [
                 _ == logocv_value for _ in df_func[logocv_column].values
             ]
+        
+        split_array = np.logical_not(split_array)
 
     elif cv_setup["cv_type"].lower() == "loocv":
         raise NotImplementedError("LOOCV not implemented yet.")
@@ -128,6 +130,27 @@ def run_regr(
     ml_features,
     ml_target,
 ):
+    """
+    Runs a regression analysis using the specified machine learning model and features.
+
+    This function performs a regression analysis on the provided DataFrame using the given machine learning model and features.
+    It splits the data into training and testing sets based on the provided split column names and calculates various evaluation metrics.
+    The function returns a dictionary containing the results and intermediate data.
+
+    Parameters:
+        df_in (pd.DataFrame): The input DataFrame.
+        ml_model: The machine learning model to use for regression analysis.
+        ml_features (list): The list of column names representing the features for regression.
+        ml_target (str): The column name representing the target variable for regression.
+
+    Returns:
+        dict: A dictionary containing the following items:
+            - 'df_in' (pd.DataFrame): The modified input DataFrame with additional prediction columns.
+            - 'ml_models' (list): A list of trained machine learning models.
+            - 'scalers' (list): A list of scalers used for feature standardization (or None if not needed).
+            - 'error_dict' (dict): A dictionary containing evaluation metrics such as RMSE, MAE, and R-squared.
+            - 'best_id' (int): The index of the best performing model based on RMSE on the testing set.
+    """
     # ! Don't filter down df columns here, as they might be needed for plotting later.
     # df_func = df_in[ml_features + [ml_target] + train_column_names].copy(deep=True)
     df_func = df_in.copy(deep=True)
@@ -278,6 +301,34 @@ def vary_ml_param(
     *args,
     **kwargs,
 ):
+    """
+    Varies a machine learning parameter and performs regression analysis for each parameter value.
+
+    This function performs regression analysis using the specified machine learning model and features.
+    It varies a machine learning parameter by iterating over the provided parameter values and runs regression analysis for each value.
+    The function returns a dictionary containing the results and intermediate data.
+
+    Parameters:
+        df_in (pd.DataFrame): The input DataFrame.
+        ml_base_model: The base machine learning model to use for regression analysis.
+        ml_features (list): The list of column names representing the features for regression.
+        ml_target (str): The column name representing the target variable for regression.
+        ml_param_dict (dict): A dictionary containing the machine learning parameter name as the key and a list of parameter values as the value.
+        color_setup (dict, optional): Color setup dictionary for plotting (default: None).
+        *args: Additional positional arguments to pass to the 'run_regr' function.
+        **kwargs: Additional keyword arguments to pass to the 'run_regr' function and plotting functions.
+
+    Returns:
+        dict: A dictionary containing the following items:
+            - 'ml_models' (list): A list of trained machine learning models for each parameter value.
+            - 'best_id' (int): The index of the best performing model based on RMSE on the testing set.
+            - 'best_param': The best parameter value.
+            - 'test_rmses' (list): A list of RMSE values on the testing set for each parameter value.
+            - 'regr_runs' (list): A list of regression analysis results for each parameter value.
+            - 'regr_figs' (dict): A dictionary containing regression analysis figures.
+            - 'error_fig' (matplotlib.figure.Figure): The figure showing the errors for different parameter values.
+            - 'error_dict' (dict): A dictionary containing the errors for different parameter values.
+    """
     # Missing: Descriptor figure and number of features list/figure.
     return_dict = {}
 
@@ -342,6 +393,7 @@ def vary_ml_param(
     # However, for convenience reasons do it here.
 
     regr_figs = plot_regr(
+        color_column="metal", # ! Add color_column
         regr_dict=best_model_run,
         color_setup=color_setup,
         regr_layout=kwargs.get("regr_layout", None),
