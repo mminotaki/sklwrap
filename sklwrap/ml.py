@@ -1,4 +1,5 @@
 import copy
+import logging
 
 import numpy as np
 import pandas as pd
@@ -74,8 +75,16 @@ def add_cv_columns(
             split_array[:, ilogocv_value] = [
                 _ == logocv_value for _ in df_func[logocv_column].values
             ]
-        
+
         split_array = np.logical_not(split_array)
+
+    elif cv_setup["cv_type"].lower() == "custom":
+        split_column_number = 2
+        custom_column = list(cv_setup["cv_spec"].keys())[0]
+        custom_test = list(cv_setup["cv_spec"].values())[0]
+        print(custom_test)
+        boolean_list = df_func[custom_column].isin(custom_test).values
+        split_array = np.array([np.logical_not(boolean_list), boolean_list]).transpose()
 
     elif cv_setup["cv_type"].lower() == "loocv":
         raise NotImplementedError("LOOCV not implemented yet.")
@@ -198,6 +207,9 @@ def run_regr(
         x_test = df_test[ml_features].values
         y_train = df_train[ml_target].values
         y_test = df_test[ml_target].values
+        logging.debug(
+            x_train.shape, x_test.shape, y_train.shape, y_test.shape, y_full.shape
+        )
 
         # Standardization within data splitting to avoid data leakage from testing data.
         if isinstance(ml_model, NEED_TO_STANDARDIZE):
@@ -399,7 +411,7 @@ def vary_ml_param(
     # However, for convenience reasons do it here.
 
     regr_figs = plot_regr(
-        color_column="metal", # ! Add color_column
+        color_column="metal",  # ! Add color_column
         regr_dict=best_model_run,
         color_setup=color_setup,
         regr_layout=kwargs.get("regr_layout", None),
