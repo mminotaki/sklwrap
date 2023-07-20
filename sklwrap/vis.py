@@ -3,105 +3,14 @@ import os
 from typing import List
 
 import numpy as np
+import pandas as pd
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
+from regex import W
 
 from .data import *
 
 # Get all the named CSS colors
-# color_list = [
-#     "#1f77b4",  # muted blue
-#     "#ff7f0e",  # safety orange
-#     "#2ca02c",  # cooked asparagus green
-#     "#d62728",  # brick red
-#     "#9467bd",  # muted purple
-#     "#8c564b",  # chestnut brown
-#     "#e377c2",  # raspberry yogurt pink
-#     "#7f7f7f",  # middle gray
-#     "#bcbd22",  # curry yellow-green
-#     "#17becf",  # blue-teal
-# ] * 10
-
-# Plotly Color Palette
-
-# named_colors = [
-#     'rgba(99,110,250,1)',
-#     'rgba(239,85,59,1)',
-#     'rgba(0,204, 150,1)',
-#     'rgba(171,99,250,1)',
-#     'rgba(255,161,90,1)',
-# color_list = [
-#     '#1f77b4',
-#     '#ff7f0e',
-#     '#2ca02c',
-#     '#d62728',
-#     '#9467bd'
-# ]
-
-# Set 1
-# named_colors = ['rgb(55,126,184,1)',
-#                  'rgb(77,175,74,1)',
-#                  'rgb(152,78,163,1)',
-#                  'rgb(255,127,0,1)',
-# ]
-
-# named_colors = ['rgba(169, 169, 169, 1)', # grey C
-#                 'rgba(42, 81, 104, 1)', # blue N
-#                 'rgba(162, 59, 62, 1)', # red P
-#                 'rgba(164, 117, 60, 1)', # orenge S
-
-# ]
-
-
-# Set 1
-# named_colors = ['rgb(55,126,184,1)',
-#                  'rgb(77,175,74,1)',
-#                  'rgb(152,78,163,1)',
-#                  'rgb(255,127,0,1)',
-# ]
-
-# named_colors = ['rgba(169, 169, 169, 1)', # grey C
-#                 'rgba(42, 81, 104, 1)', # blue N
-#                 'rgba(162, 59, 62, 1)', # red P
-#                 'rgba(164, 117, 60, 1)', # orenge S
-
-# ]
-
-
-color_list = [
-    "#FD3216",
-    "#00FE35",
-    "#6A76FC",
-    "#FED4C4",
-    "#FE00CE",
-    "#0DF9FF",
-    "#F6F926",
-    "#FF9616",
-    "#479B55",
-    "#EEA6FB",
-    "#DC587D",
-    "#D626FF",
-    "#6E899C",
-    "#00B5F7",
-] * 10
-default_blue = "#636EFA"
-# color_list.extend(
-#     [_ for _ in list(webcolors.CSS3_NAMES_TO_HEX.keys()) if "white" not in _]
-# )
-# print(color_list)
-
-
-named_symbols = ["circle", "square", "diamond", "cross", "pentagon"]
-
-
-# # G10 color pallete
-# color_list = [
-#  '#0099C6',
-#  '#DD4477',
-#  '#66AA00',
-#  '#B82E2E',
-#  '#316395',
-# ] * 10
 
 
 def plotly_to_image(
@@ -188,311 +97,32 @@ def plotly_to_image(
     return None
 
 
-def plot_regr(
-    regr_dict,
-    color_column=None,  # ! Make None as default, and possible. Currently breaks
-    show_train=True,
-    show_test=True,
-    set_range=None,
-    which_error="mean",
-    color_mapping: dict = {},
-    regr_layout=None,
-    text_column=None,
-    *args,
-    **kwargs,
+def create_mapping_dict(
+    df_in: pd.DataFrame, column: list = None, value_list: list = None
 ):
-    """
-    Generate scatter plots for regression results.
-
-    Args:
-        regr_dict (dict): A dictionary containing regression results and data.
-        color_column (str): The name of the column in the dataset to use for coloring the data points.
-        show_train (bool, optional): Whether to show the training data points. Defaults to True.
-        show_test (bool, optional): Whether to show the test data points. Defaults to True.
-        set_range (tuple, optional): The range of values to be displayed on the x and y axes. If None, the range is determined automatically. Defaults to None.
-        which_error (str, optional): The type of error to display in the annotation. Possible values: "mean", "best", "full_mean", "full_best", "all". Defaults to "mean".
-        color_mapping (dict, optional): A dictionary mapping column values to color names or hex values. If None, default colors are used. Defaults to None.
-        regr_layout (dict, optional): Additional layout options for the plotly figure. Defaults to None.
-        text_column (str, optional): The name of the column in the dataset to use for text labels on the data points. Defaults to None.
-        *args: Additional positional arguments.
-        **kwargs: Additional keyword arguments.
-
-    Returns:
-        list: A list of plotly figures representing the regression scatter plots.
-
-    Raises:
-        KeyError: If an invalid error specification is used for `which_error`.
-
-    Notes:
-        - The `regr_dict` parameter should contain the following keys: 'error_dict', 'df_in'.
-        - The 'error_dict' should contain error metrics for train and test sets, e.g., 'rsquared_trains', 'rsquared_tests', 'rmse_trains', 'rmse_tests', etc.
-        - The 'df_in' should contain the dataset used for regression, including the columns specified in `color_column` and `text_column` if applicable.
-    """
-    # function_arguments = locals()
-
-    # print(type(kwargs))
-    # print(type(function_arguments))
-    # print(function_arguments.keys())
-
-    # Include threshold for deviation somewhere
-    # TODO: When doing LOOCV, the excluded metal (group) is not added to the legend.
-    # TODO: Add possibility to provide specific colors. Had to remove that from the metal-color dict so that the code works general.
-    # TODO: All plotly layout options using kwargs: `showticklabels`, `showlegend`, `label_column`
-
-    # # Print the color names and their corresponding hex values
-    # for color_name, hex_value in color_list.items():
-    #     print(f"{color_name}: {hex_value}")
-    error_dict = regr_dict["error_dict"]
-
-    df_func = regr_dict["df_in"].copy(deep=True)
-
-    # if color_setup is None:
-    #     text_colum
-    #     color_setup = {}
-
-    # ! At least color column needs to be set to something for the loop over the values later on.
-    # ? Currently, using kwargs or the first column of the df to get a column to do the looping over.
-
-    # color_setup = {k:v for k,v in }
-    # print(color_setup)
-
-    # color_column = list(color_setup.keys())[0]
-    # color_mapping = list(color_setup.values())[0]
-
-    # ! Sort df so that legend items appear ordered -> Check that this does not mess up the ordering from input to pred values.
-    if color_column is None:
-        # ! Cheap hack so that the column with the least number of values is used.
-        color_column = get_color_column(df_func)
-
-    # TODO: Make verbose here to print if
-    df_func = df_func.dropna(subset=[color_column])
-    color_column_values = sorted(list(set(list(df_func[color_column].values))))
-    if color_mapping is None:
-        color_mapping = {
+    print(column, value_list)
+    if column is None and value_list is None:
+        return {}
+    elif column is not None and value_list is not None:
+        # df_out = df_out.dropna(subset=[column])
+        df_out = df_in.copy(deep=True)
+        column_values = sorted(list(set(list(df_out[column].values))))
+        mapping_dict = {
             k: v
-            for k, v in list(
-                zip(color_column_values, color_list[0 : len(color_column_values)])
-            )
+            for k, v in list(zip(column_values, value_list[0 : len(column_values)]))
         }
 
-    df_func = df_func.sort_values(by=color_column)
-
-    regr_figs = []
-
-    bool_columns = [col for col in df_func.columns if "train" in col]
-    pred_columns = [col for col in df_func.columns if "pred" in col]
-
-    for cv_id in range(len(error_dict["rmse_trains"])):
-        cv_id_bool_column = bool_columns[int(cv_id)]
-        cv_id_pred_column = pred_columns[int(cv_id)]
-
-        split_bool_array = df_func[cv_id_bool_column].values
-
-        df_train = df_func[split_bool_array].copy(deep=True)
-        df_test = df_func[np.logical_not(split_bool_array)].copy(deep=True)
-
-        # Instantiate figure
-        regr_fig = go.Figure()
-
-        # Add annotation with R^2 and RMSEs
-        # TODO: Implement this better
-
-        # region
-        if which_error != "all":
-            if which_error == "mean":
-                error_list = [
-                    np.mean(error_dict["rsquared_tests"]),
-                    np.std(error_dict["rsquared_tests"]),
-                    np.mean(error_dict["rmse_tests"]),
-                    np.std(error_dict["rmse_tests"]),
-                    np.mean(error_dict["mae_tests"]),
-                    np.std(error_dict["mae_tests"]),
-                ]
-            elif which_error == "best":
-                error_list = [
-                    np.max(error_dict["rsquared_tests"]),
-                    np.std(error_dict["rsquared_tests"]),
-                    np.min(error_dict["rmse_tests"]),
-                    np.std(error_dict["rmse_tests"]),
-                    np.min(error_dict["mae_tests"]),
-                    np.std(error_dict["mae_tests"]),
-                ]
-            elif which_error == "full_mean":
-                error_list = [
-                    np.mean(error_dict["rsquared_fulls"]),
-                    np.std(error_dict["rsquared_fulls"]),
-                    np.mean(error_dict["rmse_fulls"]),
-                    np.std(error_dict["rmse_fulls"]),
-                    np.mean(error_dict["mae_fulls"]),
-                    np.std(error_dict["mae_fulls"]),
-                ]
-            elif which_error == "full_best":
-                error_list = [
-                    np.max(error_dict["rsquared_fulls"]),
-                    np.std(error_dict["rsquared_fulls"]),
-                    np.min(error_dict["rmse_fulls"]),
-                    np.std(error_dict["rmse_fulls"]),
-                    np.min(error_dict["mae_fulls"]),
-                    np.std(error_dict["mae_fulls"]),
-                ]
-            else:
-                raise KeyError("Invalid error specification used.")
-            # endregion
-
-            error_text = "R<sup>2</sup> = {:.3f} &#177; {:.3f}<br>RMSE = {:.3f} &#177; {:.3f}<br>MAE = {:.3f} &#177; {:.3f}".format(
-                *error_list
-            )
-        # ! Change decimal to 3
-        else:
-            error_list_train = [
-                np.mean(error_dict["rsquared_trains"]),
-                np.std(error_dict["rsquared_trains"]),
-                np.mean(error_dict["rmse_trains"]),
-                np.std(error_dict["rmse_trains"]),
-                np.mean(error_dict["mae_trains"]),
-                np.std(error_dict["mae_trains"]),
-            ]
-            error_text = "Train:<br>R<sup>2</sup> = {:.2f} &#177; {:.2f}<br>RMSE = {:.2f} &#177; {:.2f}<br>MAE = {:.2f} &#177; {:.2f}".format(
-                *error_list_train
-            )
-            error_list_test = [
-                np.mean(error_dict["rsquared_tests"]),
-                np.std(error_dict["rsquared_tests"]),
-                np.mean(error_dict["rmse_tests"]),
-                np.std(error_dict["rmse_tests"]),
-                np.mean(error_dict["mae_tests"]),
-                np.std(error_dict["mae_tests"]),
-            ]
-
-            error_text += "<br>Test:<br>R<sup>2</sup> = {:.2f} &#177; {:.2f}<br>RMSE = {:.2f} &#177; {:.2f}<br>MAE = {:.2f} &#177; {:.2f}".format(
-                *error_list_test
-            )
-
-        _ = regr_fig.add_annotation(
-            xanchor="left",
-            yanchor="top",
-            xref="paper",
-            yref="paper",
-            x=0,
-            y=1,
-            align="left",
-            text=error_text,
-            font_size=26,
-            font_family="Arial",
-            showarrow=False,
-            bgcolor="rgba(0,0,0,0.1)",
-        )
-        # region
-
-        # Plot energy data points
-        # ! Difference between train and test via marker symbol
-        # ! Different colors based on a column
-
-        # print("color_column", color_column)
-        if show_train is True:
-            for column_value in df_train[color_column].unique():
-                column_train_df = df_train.loc[df_train[color_column] == column_value]
-                if text_column is not None:
-                    plot_text = column_train_df[text_column]
-                else:
-                    plot_text = [""] * column_train_df.shape[0]
-                ###
-                _ = regr_fig.add_trace(
-                    go.Scatter(
-                        x=column_train_df["y"],
-                        y=column_train_df[cv_id_pred_column],
-                        mode="markers",
-                        marker=dict(
-                            size=8,
-                            symbol=0,
-                            opacity=1,
-                            color=color_mapping.get(column_value, default_blue),
-                        ),
-                        hoverinfo="text+x+y",
-                        name="{}".format(column_value),
-                        text=plot_text,
-                        legendgroup="{}".format(column_value),
-                        showlegend=kwargs.get("show_train_legend", True),
-                    ),
-                )
-
-        if show_test is True:
-            for column_value in df_test[color_column].unique():
-                column_test_df = df_test.loc[df_test[color_column] == column_value]
-                if text_column is not None:
-                    plot_text = column_test_df[text_column]
-                else:
-                    plot_text = "" * column_test_df.shape[0]
-                ###
-                _ = regr_fig.add_trace(
-                    go.Scatter(
-                        x=column_test_df["y"],
-                        y=column_test_df[cv_id_pred_column],
-                        mode="markers",
-                        marker=dict(
-                            size=8,
-                            symbol=4,
-                            opacity=1,
-                            color=color_mapping.get(column_value, "black"),
-                        ),
-                        hoverinfo="text+x+y",
-                        name="{}".format(column_value),
-                        text=plot_text,
-                        legendgroup="{}".format(column_value),
-                        showlegend=kwargs.get("show_test_legend", False),
-                    ),
-                )
-
-        # endregion
-
-        if set_range is None:
-            all_values = (
-                df_train["y"].tolist()
-                + df_train[cv_id_pred_column].tolist()
-                + df_test["y"].tolist()
-                + df_test[cv_id_pred_column].tolist()
-            )
-            all_values = list(map(float, all_values))
-
-            full_range = [min(all_values), max(all_values)]
-            range_ext = (
-                full_range[0] - 0.075 * np.ptp(full_range),
-                full_range[1] + 0.075 * np.ptp(full_range),
-            )
-        else:
-            range_ext = set_range
-
-        # Add ideal fit line to plot
-        _ = regr_fig.add_trace(
-            go.Scatter(
-                x=range_ext,
-                y=range_ext,
-                mode="lines",
-                line=dict(color="black", width=2, dash="dash"),
-                hoverinfo="skip",
-                showlegend=False,
-            ),
-        )
-
-        # Update global layout
-
-        if regr_layout is not None:
-            _ = regr_fig.update_layout(regr_layout)
-
-        axes_layout = go.Layout(
-            xaxis=dict(range=range_ext), yaxis=dict(range=range_ext)
-        )
-        _ = regr_fig.update_layout(axes_layout)
-
-        regr_figs.append(regr_fig)
-
-    return regr_figs
+        return mapping_dict
+    else:
+        raise ValueError("Either both or none of the parameters must be set.")
 
 
-def plot_regr_color_symbol(
+def plot_regr(
     regr_dict,
     color_column=None,
+    color_list=None,
     symbol_column=None,
+    symbol_list=None,
     show_train=True,
     show_test=True,
     set_range=None,
@@ -560,32 +190,15 @@ def plot_regr_color_symbol(
     # color_column = list(color_setup.keys())[0]
     # color_mapping = list(color_setup.values())[0]
 
-    # ! Sort df so that legend items appear ordered -> Check that this does not mess up the ordering from input to pred values.
-    if color_column is not None:
-        # TODO: Make verbose here to print if
-        df_func = df_func.dropna(subset=[color_column])
-        color_column_values = sorted(list(set(list(df_func[color_column].values))))
-        color_mapping = {
-            k: v
-            for k, v in list(
-                zip(color_column_values, color_list[0 : len(color_column_values)])
-            )
-        }
+    # ! Sort df so that legend items appear ordered -> Check that this does not
+    # mess up the ordering from input to pred values.
 
-        df_func = df_func.sort_values(by=color_column)
-
-    if symbol_column is not None:
-        # TODO: Make verbose here to print if
-        df_func = df_func.dropna(subset=[symbol_column])
-        symbol_column_values = sorted(list(set(list(df_func[symbol_column].values))))
-        symbol_mapping = {
-            k: v
-            for k, v in list(
-                zip(symbol_column_values, symbol_list[0 : len(symbol_column_values)])
-            )
-        }
-
-        print("Symbol Mapping:", symbol_mapping)  # Check the mapping
+    color_mapping = create_mapping_dict(
+        df_in=df_func, column=color_column, value_list=color_list
+    )
+    symbol_mapping = create_mapping_dict(
+        df_in=df_func, column=symbol_column, value_list=symbol_list
+    )
 
     regr_figs = []
 
@@ -607,7 +220,6 @@ def plot_regr_color_symbol(
         # Add annotation with R^2 and RMSEs
         # TODO: Implement this better
 
-        # region
         if which_error != "all":
             if which_error == "mean":
                 error_list = [
@@ -647,7 +259,6 @@ def plot_regr_color_symbol(
                 ]
             else:
                 raise KeyError("Invalid error specification used.")
-            # endregion
 
             error_text = "R<sup>2</sup> = {:.3f} &#177; {:.3f}<br>RMSE = {:.3f} &#177; {:.3f}<br>MAE = {:.3f} &#177; {:.3f}".format(
                 *error_list
@@ -927,7 +538,6 @@ def plot_regr_train_test(
         # Add annotation with R^2 and RMSEs
         # TODO: Implement this better
 
-        # region
         if which_error != "all":
             if which_error == "mean":
                 error_list = [
@@ -967,7 +577,6 @@ def plot_regr_train_test(
                 ]
             else:
                 raise KeyError("Invalid error specification used.")
-            # endregion
 
             error_text = "R<sup>2</sup> = {:.3f} &#177; {:.3f}<br>RMSE = {:.3f} &#177; {:.3f}<br>MAE = {:.3f} &#177; {:.3f}".format(
                 *error_list
@@ -1012,7 +621,6 @@ def plot_regr_train_test(
             showarrow=False,
             bgcolor="rgba(0,0,0,0.1)",
         )
-        # region
 
         # Plot energy data points
         # ! Difference between train and test via marker symbol
@@ -1082,8 +690,6 @@ def plot_regr_train_test(
                         showlegend=kwargs.get("show_test_legend", False),
                     ),
                 )
-
-        # endregion
 
         if set_range is None:
             all_values = (
@@ -1287,326 +893,3 @@ def plot_errors(
     _ = error_fig.update_layout(error_layout)
 
     return error_fig
-
-
-def plot_regr_color_symbol_dev(
-    regr_dict,
-    color_column=None,
-    symbol_column=None,
-    color_list=None,
-    symbol_list=None,
-    show_train=True,
-    show_test=True,
-    set_range=None,
-    which_error="mean",
-    regr_layout=None,
-    axes_layout=None,
-    text_column=None,
-    **kwargs,
-):
-    """
-    Generate scatter plots for regression results.
-
-    Args:
-        regr_dict (dict): A dictionary containing regression results and data.
-        color_column (str): The name of the column in the dataset to use for coloring the data points.
-        show_train (bool, optional): Whether to show the training data points. Defaults to True.
-        show_test (bool, optional): Whether to show the test data points. Defaults to True.
-        set_range (tuple, optional): The range of values to be displayed on the x and y axes. If None, the range is determined automatically. Defaults to None.
-        which_error (str, optional): The type of error to display in the annotation. Possible values: "mean", "best", "full_mean", "full_best", "all". Defaults to "mean".
-        color_mapping (dict, optional): A dictionary mapping column values to color names or hex values. If None, default colors are used. Defaults to None.
-        regr_layout (dict, optional): Additional layout options for the plotly figure. Defaults to None.
-        text_column (str, optional): The name of the column in the dataset to use for text labels on the data points. Defaults to None.
-        *args: Additional positional arguments.
-        **kwargs: Additional keyword arguments.
-
-    Returns:
-        list: A list of plotly figures representing the regression scatter plots.
-
-    Raises:
-        KeyError: If an invalid error specification is used for `which_error`.
-
-    Notes:
-        - The `regr_dict` parameter should contain the following keys: 'error_dict', 'df_in'.
-        - The 'error_dict' should contain error metrics for train and test sets, e.g., 'rsquared_trains', 'rsquared_tests', 'rmse_trains', 'rmse_tests', etc.
-        - The 'df_in' should contain the dataset used for regression, including the columns specified in `color_column` and `text_column` if applicable.
-    """
-    # function_arguments = locals()
-    # print(type(kwargs))
-    # print(type(function_arguments))
-    # print(function_arguments.keys())
-
-    # Include threshold for deviation somewhere
-    # TODO: When doing LOOCV, the excluded metal (group) is not added to the legend.
-    # TODO: Add possibility to provide specific colors. Had to remove that from the metal-color dict so that the code works general.
-    # TODO: All plotly layout options using kwargs: `showticklabels`, `showlegend`, `label_column`
-
-    # # Print the color names and their corresponding hex values
-    # for color_name, hex_value in color_list.items():
-    #     print(f"{color_name}: {hex_value}")
-    error_dict = regr_dict["error_dict"]
-
-    df_func = regr_dict["df_in"].copy(deep=True)
-
-    # if color_setup is None:
-    #     text_colum
-    #     color_setup = {}
-
-    # ! At least color column needs to be set to something for the loop over the values later on.
-    # ? Currently, using kwargs or the first column of the df to get a column to do the looping over.
-
-    # color_setup = {k:v for k,v in }
-    # print(color_setup)
-
-    # color_column = list(color_setup.keys())[0]
-    # color_mapping = list(color_setup.values())[0]
-
-    # ! Sort df so that legend items appear ordered -> Check that this does not mess up the ordering from input to pred values.
-    if color_column is not None:
-        # TODO: Make verbose here to print if
-        # ! We shouldn't drop nons here
-        df_func = df_func.dropna(subset=[color_column])
-        color_column_values = sorted(list(set(list(df_func[color_column].values))))
-        color_mapping = {
-            k: v
-            for k, v in list(
-                zip(color_column_values, color_list[0 : len(color_column_values)])
-            )
-        }
-
-        df_func = df_func.sort_values(by=color_column)
-
-    if symbol_column is not None:
-        # TODO: Make verbose here to print if
-        df_func = df_func.dropna(subset=[symbol_column])
-        symbol_column_values = sorted(list(set(list(df_func[symbol_column].values))))
-        symbol_mapping = {
-            k: v
-            for k, v in list(
-                zip(symbol_column_values, symbol_list[0 : len(symbol_column_values)])
-            )
-        }
-
-        # print("Symbol Mapping:", symbol_mapping)  # Check the mapping
-
-    regr_figs = []
-
-    bool_columns = [col for col in df_func.columns if "train" in col]
-    pred_columns = [col for col in df_func.columns if "pred" in col]
-
-    for cv_id in range(len(error_dict["rmse_trains"])):
-        cv_id_bool_column = bool_columns[int(cv_id)]
-        cv_id_pred_column = pred_columns[int(cv_id)]
-
-        split_bool_array = df_func[cv_id_bool_column].values
-
-        df_train = df_func[split_bool_array].copy(deep=True)
-        df_test = df_func[np.logical_not(split_bool_array)].copy(deep=True)
-
-        # Instantiate figure
-        regr_fig = go.Figure()
-
-        # Add annotation with R^2 and RMSEs
-        # TODO: Implement this better
-
-        # region
-        if which_error != "all":
-            if which_error == "mean":
-                error_list = [
-                    np.mean(error_dict["rsquared_tests"]),
-                    np.std(error_dict["rsquared_tests"]),
-                    np.mean(error_dict["rmse_tests"]),
-                    np.std(error_dict["rmse_tests"]),
-                    np.mean(error_dict["mae_tests"]),
-                    np.std(error_dict["mae_tests"]),
-                ]
-            elif which_error == "best":
-                error_list = [
-                    np.max(error_dict["rsquared_tests"]),
-                    np.std(error_dict["rsquared_tests"]),
-                    np.min(error_dict["rmse_tests"]),
-                    np.std(error_dict["rmse_tests"]),
-                    np.min(error_dict["mae_tests"]),
-                    np.std(error_dict["mae_tests"]),
-                ]
-            elif which_error == "full_mean":
-                error_list = [
-                    np.mean(error_dict["rsquared_fulls"]),
-                    np.std(error_dict["rsquared_fulls"]),
-                    np.mean(error_dict["rmse_fulls"]),
-                    np.std(error_dict["rmse_fulls"]),
-                    np.mean(error_dict["mae_fulls"]),
-                    np.std(error_dict["mae_fulls"]),
-                ]
-            elif which_error == "full_best":
-                error_list = [
-                    np.max(error_dict["rsquared_fulls"]),
-                    np.std(error_dict["rsquared_fulls"]),
-                    np.min(error_dict["rmse_fulls"]),
-                    np.std(error_dict["rmse_fulls"]),
-                    np.min(error_dict["mae_fulls"]),
-                    np.std(error_dict["mae_fulls"]),
-                ]
-            else:
-                raise KeyError("Invalid error specification used.")
-            # endregion
-
-            error_text = "R<sup>2</sup> = {:.3f} &#177; {:.3f}<br>RMSE = {:.3f} &#177; {:.3f}<br>MAE = {:.3f} &#177; {:.3f}".format(
-                *error_list
-            )
-        # ! Change decimal to 3
-        else:
-            error_list_train = [
-                np.mean(error_dict["rsquared_trains"]),
-                np.std(error_dict["rsquared_trains"]),
-                np.mean(error_dict["rmse_trains"]),
-                np.std(error_dict["rmse_trains"]),
-                np.mean(error_dict["mae_trains"]),
-                np.std(error_dict["mae_trains"]),
-            ]
-            error_text = "Train:<br>R<sup>2</sup> = {:.2f} &#177; {:.2f}<br>RMSE = {:.2f} &#177; {:.2f}<br>MAE = {:.2f} &#177; {:.2f}".format(
-                *error_list_train
-            )
-            error_list_test = [
-                np.mean(error_dict["rsquared_tests"]),
-                np.std(error_dict["rsquared_tests"]),
-                np.mean(error_dict["rmse_tests"]),
-                np.std(error_dict["rmse_tests"]),
-                np.mean(error_dict["mae_tests"]),
-                np.std(error_dict["mae_tests"]),
-            ]
-
-            error_text += "<br>Test:<br>R<sup>2</sup> = {:.2f} &#177; {:.2f}<br>RMSE = {:.2f} &#177; {:.2f}<br>MAE = {:.2f} &#177; {:.2f}".format(
-                *error_list_test
-            )
-
-        _ = regr_fig.add_annotation(
-            xanchor="left",
-            yanchor="top",
-            xref="paper",
-            yref="paper",
-            x=0,
-            y=1,
-            align="left",
-            text=error_text,
-            font_size=26,
-            font_family="Arial",
-            showarrow=False,
-            bgcolor="rgba(0,0,0,0.1)",
-        )
-
-        # Plot energy data points
-        # ! Difference between train and test via marker symbol
-        # ! Different colors based on a column
-
-        # print("color_column", color_column)
-        if show_train is True:
-            for column_value in df_train[color_column].unique():
-                column_train_df = df_train.loc[df_train[color_column] == column_value]
-                if text_column is not None:
-                    plot_text = column_train_df[text_column]
-                else:
-                    plot_text = [""] * column_train_df.shape[0]
-
-                train_symbols = [
-                    symbol_mapping.get(_, "star")
-                    for _ in column_train_df[symbol_column].values
-                ]
-
-                _ = regr_fig.add_trace(
-                    go.Scatter(
-                        x=column_train_df["y"],
-                        y=column_train_df[cv_id_pred_column],
-                        mode="markers",
-                        marker=dict(
-                            size=10,
-                            symbol=train_symbols,
-                            opacity=1,
-                            color=color_mapping.get(column_value, "black"),
-                        ),
-                        hoverinfo="text+x+y",
-                        name="{}".format(column_value),
-                        # name=kwargs.get("legendgroup", f"{column_value}"),
-                        text=plot_text,
-                        legendgroup="{}".format(column_value),
-                        # legendgroup=kwargs.get("legendgroup", f"{column_value}"),
-                        showlegend=kwargs.get("show_train_legend", True),
-                    ),
-                )
-
-        if show_test is True:
-            for column_value in df_test[color_column].unique():
-                column_test_df = df_test.loc[df_test[color_column] == column_value]
-                if text_column is not None:
-                    plot_text = column_test_df[text_column]
-                else:
-                    plot_text = [""] * column_test_df.shape[0]
-
-                test_symbols = [
-                    symbol_mapping.get(_, "star")
-                    for _ in column_test_df[symbol_column].values
-                ]
-
-                _ = regr_fig.add_trace(
-                    go.Scatter(
-                        x=column_test_df["y"],
-                        y=column_test_df[cv_id_pred_column],
-                        mode="markers",
-                        marker=dict(
-                            size=10,
-                            symbol=test_symbols,
-                            opacity=1,
-                            color=color_mapping.get(column_value, "black"),
-                        ),
-                        hoverinfo="text+x+y",
-                        name="{}".format(column_value),
-                        # name=kwargs.get("legendgroup", f"{column_value}"),
-                        text=plot_text,
-                        legendgroup="{}".format(column_value),
-                        # legendgroup=kwargs.get("legendgroup", f"{column_value}"),
-                        showlegend=kwargs.get("show_test_legend", True),
-                    ),
-                )
-
-        if set_range is None:
-            all_values = (
-                df_train["y"].tolist()
-                + df_train[cv_id_pred_column].tolist()
-                + df_test["y"].tolist()
-                + df_test[cv_id_pred_column].tolist()
-            )
-            all_values = list(map(float, all_values))
-
-            full_range = [min(all_values), max(all_values)]
-            range_ext = (
-                full_range[0] - 0.075 * np.ptp(full_range),
-                full_range[1] + 0.075 * np.ptp(full_range),
-            )
-        else:
-            range_ext = set_range
-
-        # Add ideal fit line to plot
-        _ = regr_fig.add_trace(
-            go.Scatter(
-                x=range_ext,
-                y=range_ext,
-                mode="lines",
-                line=dict(color="black", width=2, dash="dash"),
-                hoverinfo="skip",
-                showlegend=False,
-            ),
-        )
-
-        # Update global layout
-
-        if regr_layout is not None:
-            _ = regr_fig.update_layout(regr_layout)
-
-        axes_layout = go.Layout(
-            xaxis=dict(range=range_ext), yaxis=dict(range=range_ext)
-        )
-        _ = regr_fig.update_layout(axes_layout)
-
-        regr_figs.append(regr_fig)
-
-    return regr_figs
