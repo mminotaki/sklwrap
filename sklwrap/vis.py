@@ -8,7 +8,7 @@ from plotly.subplots import make_subplots
 
 from .data import *
 
-# Get all the named CSS colors
+# # Get all the named CSS colors
 # named_colors = [
 #     "#1f77b4",  # muted blue
 #     "#ff7f0e",  # safety orange
@@ -22,15 +22,30 @@ from .data import *
 #     "#17becf",  # blue-teal
 # ] * 10
 
-# Light24 Palette
+# Plotly Color Palette
 
 # named_colors = [
-#     '#1f77b4',
-#     '#ff7f0e',
-#     '#2ca02c',
-#     '#d62728',
-#     '#9467bd'
+#     'rgba(99,110,250,1)',
+#     'rgba(239,85,59,1)',
+#     'rgba(0,204, 150,1)',
+#     'rgba(171,99,250,1)',
+#     'rgba(255,161,90,1)',
 # ]
+
+# Set 1
+# named_colors = ['rgb(55,126,184,1)',
+#                  'rgb(77,175,74,1)',
+#                  'rgb(152,78,163,1)', 
+#                  'rgb(255,127,0,1)',
+# ]
+
+# named_colors = ['rgba(169, 169, 169, 1)', # grey C
+#                 'rgba(42, 81, 104, 1)', # blue N   
+#                 'rgba(162, 59, 62, 1)', # red P
+#                 'rgba(164, 117, 60, 1)', # orenge S
+                       
+# ]
+
 
 named_colors = [
     '#FD3216',
@@ -56,11 +71,11 @@ default_blue = "#636EFA"
 
 
 named_symbols = [
-        'circle',
-        'square',
-        'diamond',
-        'cross',
-        'pentagon'
+        'circle', #din3
+        'square', #din4
+        'diamond', #rol1-din2
+        'pentagon',# rol2-din2
+        'hexagon', # rol3
 ]
 
 
@@ -691,10 +706,15 @@ def plot_regr_color_symbol(
                         y=column_train_df[cv_id_pred_column],
                         mode="markers",
                         marker=dict(
-                            size=10,
+                            size=12,
                             symbol=train_symbols,
                             opacity=1,
+                            #color='rgba(255, 255, 255, 0.5)',
                             color=color_mapping.get(column_value, "black"),
+                            line=dict(
+                            color="black",
+                            #color=color_mapping.get(column_value, "black"),  # Rigid black color for the  perimeter
+                            width=2 ) # Adjust the width of the  perimeter
                         ),
                         hoverinfo="text+x+y",
                         name="{}".format(column_value),
@@ -723,10 +743,16 @@ def plot_regr_color_symbol(
                         y=column_test_df[cv_id_pred_column],
                         mode="markers",
                         marker=dict(
-                            size=10,
+                            size=12,
                             symbol=test_symbols,
                             opacity=1,
+                            #color='rgba(255, 255, 255, 0.5)',
                             color=color_mapping.get(column_value, "black"),
+                            line=dict(   
+                            color="black",
+                            #color=color_mapping.get(column_value, "black"),  # Rigid black color for the perimeter
+                            width=2,
+                            ) # Adjust the width of the perimeter
                         ),
                         hoverinfo="text+x+y",
                         name="{}".format(column_value),
@@ -773,6 +799,8 @@ def plot_regr_color_symbol(
         axes_layout = go.Layout(
             xaxis=dict(range=range_ext), yaxis=dict(range=range_ext)
         )
+
+            
         _ = regr_fig.update_layout(axes_layout)
 
         regr_figs.append(regr_fig)
