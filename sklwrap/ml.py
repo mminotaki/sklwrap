@@ -82,7 +82,6 @@ def add_cv_columns(
         split_column_number = 2
         custom_column = list(cv_setup["cv_spec"].keys())[0]
         custom_test = list(cv_setup["cv_spec"].values())[0]
-        print(custom_test)
         boolean_list = df_func[custom_column].isin(custom_test).values
         split_array = np.array([np.logical_not(boolean_list), boolean_list]).transpose()
 

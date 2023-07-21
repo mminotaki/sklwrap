@@ -1,4 +1,5 @@
 import copy
+import logging
 import os
 from typing import Hashable, List
 
@@ -267,11 +268,9 @@ def plot_regr(
     show_test=True,
     set_range=None,
     which_error="mean",
-    color_mapping=None,
     regr_layout=None,
     axes_layout={},
     text_column=None,
-    *args,
     **kwargs,
 ):
     """
@@ -317,19 +316,6 @@ def plot_regr(
     error_dict = regr_dict["error_dict"]
 
     df_func = regr_dict["df_in"].copy(deep=True)
-
-    # if color_setup is None:
-    #     text_colum
-    #     color_setup = {}
-
-    # ! At least color column needs to be set to something for the loop over the values later on.
-    # ? Currently, using kwargs or the first column of the df to get a column to do the looping over.
-
-    # color_setup = {k:v for k,v in }
-    # print(color_setup)
-
-    # color_column = list(color_setup.keys())[0]
-    # color_mapping = list(color_setup.values())[0]
 
     # ! Sort df so that legend items appear ordered -> Check that this does not
     # mess up the ordering from input to pred values.
@@ -384,12 +370,7 @@ def plot_regr(
         if symbol_column is None:
             symbol_column = get_df_cardinality_col(df_in=df_func)
 
-        # Plot energy data points
-        # ! Difference between train and test via marker symbol
-        # ! Different colors based on a column
-
-        # print("color_column", color_column)
-
+        # ?Plot energy data points
         if show_train is True:
             regr_fig = _add_train_test_trace(
                 df_in=df_train,
