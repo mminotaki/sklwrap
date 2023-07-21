@@ -1,12 +1,13 @@
 import copy
 import os
-from typing import List
+from typing import Hashable, List
 
 import numpy as np
 import pandas as pd
 import plotly.graph_objs as go
+from ase import Atoms
 from plotly.subplots import make_subplots
-from regex import W
+from regex import D, W
 
 from .data import *
 
@@ -100,7 +101,6 @@ def plotly_to_image(
 def create_mapping_dict(
     df_in: pd.DataFrame, column: list = None, value_list: list = None
 ):
-    print(column, value_list)
     if column is None and value_list is None:
         return {}
     elif column is not None and value_list is not None:
@@ -117,6 +117,146 @@ def create_mapping_dict(
         raise ValueError("Either both or none of the parameters must be set.")
 
 
+def create_error_text(error_dict, which_error):
+    if which_error != "all":
+        if which_error == "mean":
+            error_list = [
+                np.mean(error_dict["rsquared_tests"]),
+                np.std(error_dict["rsquared_tests"]),
+                np.mean(error_dict["rmse_tests"]),
+                np.std(error_dict["rmse_tests"]),
+                np.mean(error_dict["mae_tests"]),
+                np.std(error_dict["mae_tests"]),
+            ]
+        elif which_error == "best":
+            error_list = [
+                np.max(error_dict["rsquared_tests"]),
+                np.std(error_dict["rsquared_tests"]),
+                np.min(error_dict["rmse_tests"]),
+                np.std(error_dict["rmse_tests"]),
+                np.min(error_dict["mae_tests"]),
+                np.std(error_dict["mae_tests"]),
+            ]
+        elif which_error == "full_mean":
+            error_list = [
+                np.mean(error_dict["rsquared_fulls"]),
+                np.std(error_dict["rsquared_fulls"]),
+                np.mean(error_dict["rmse_fulls"]),
+                np.std(error_dict["rmse_fulls"]),
+                np.mean(error_dict["mae_fulls"]),
+                np.std(error_dict["mae_fulls"]),
+            ]
+        elif which_error == "full_best":
+            error_list = [
+                np.max(error_dict["rsquared_fulls"]),
+                np.std(error_dict["rsquared_fulls"]),
+                np.min(error_dict["rmse_fulls"]),
+                np.std(error_dict["rmse_fulls"]),
+                np.min(error_dict["mae_fulls"]),
+                np.std(error_dict["mae_fulls"]),
+            ]
+        else:
+            raise KeyError("Invalid error specification used.")
+
+        error_text = "R<sup>2</sup> = {:.3f} &#177; {:.3f}<br>RMSE = {:.3f} &#177; {:.3f}<br>MAE = {:.3f} &#177; {:.3f}".format(
+            *error_list
+        )
+        # ! Change decimal to 3
+    else:
+        error_list_train = [
+            np.mean(error_dict["rsquared_trains"]),
+            np.std(error_dict["rsquared_trains"]),
+            np.mean(error_dict["rmse_trains"]),
+            np.std(error_dict["rmse_trains"]),
+            np.mean(error_dict["mae_trains"]),
+            np.std(error_dict["mae_trains"]),
+        ]
+        error_text = "Train:<br>R<sup>2</sup> = {:.2f} &#177; {:.2f}<br>RMSE = {:.2f} &#177; {:.2f}<br>MAE = {:.2f} &#177; {:.2f}".format(
+            *error_list_train
+        )
+        error_list_test = [
+            np.mean(error_dict["rsquared_tests"]),
+            np.std(error_dict["rsquared_tests"]),
+            np.mean(error_dict["rmse_tests"]),
+            np.std(error_dict["rmse_tests"]),
+            np.mean(error_dict["mae_tests"]),
+            np.std(error_dict["mae_tests"]),
+        ]
+
+        error_text += "<br>Test:<br>R<sup>2</sup> = {:.2f} &#177; {:.2f}<br>RMSE = {:.2f} &#177; {:.2f}<br>MAE = {:.2f} &#177; {:.2f}".format(
+            *error_list_test
+        )
+    return error_text
+
+
+def get_df_cardinality_col(df_in, which: str = "lowest"):
+    nunique_series = df_in.select_dtypes(include=["number"]).nunique()
+    cardinality_column = nunique_series[nunique_series > 0].idxmin()
+    return cardinality_column
+
+
+def _add_train_test_trace(
+    df_in,
+    regr_fig,
+    color_column,
+    symbol_column,
+    text_column,
+    symbol_mapping,
+    color_mapping,
+    cv_id_pred_column,
+    which_trace,
+    **kwargs,
+):
+    DEFAULT_COLOR_DICT = {"train": "black", "test": "red"}
+    DEFAULT_SYMBOL_DICT = {"train": "circle", "test": "cross"}
+
+    if color_column is None:
+        color_column = df_in.nunique().idxmin()
+
+    color_column_values = df_in[color_column].unique()
+
+    for color_column_value in color_column_values:
+        column_train_df = df_in.loc[df_in[color_column] == color_column_value]
+        if text_column is not None:
+            plot_text = column_train_df[text_column]
+        else:
+            plot_text = [""] * column_train_df.shape[0]
+
+        symbols = [
+            symbol_mapping.get(_, DEFAULT_SYMBOL_DICT[which_trace])
+            for _ in column_train_df[symbol_column].values
+        ]
+
+        colors = color_mapping.get(color_column_value, DEFAULT_COLOR_DICT[which_trace])
+
+        _ = regr_fig.add_trace(
+            go.Scatter(
+                x=column_train_df["y"],
+                y=column_train_df[cv_id_pred_column],
+                mode="markers",
+                marker=dict(
+                    size=12,
+                    symbol=symbols,
+                    opacity=1,
+                    color=colors,
+                    line=dict(
+                        color="black",
+                        # color=color_mapping.get(column_value, "black"),  # Rigid black color for the  perimeter
+                        width=2,
+                    ),  # Adjust the width of the  perimeter
+                ),
+                hoverinfo="text+x+y",
+                name="{}".format(color_column_value),
+                # name=kwargs.get("legendgroup", f"{column_value}"),
+                text=plot_text,
+                legendgroup="{}".format(color_column_value),
+                # legendgroup=kwargs.get("legendgroup", f"{column_value}"),
+                showlegend=kwargs.get("show_train_legend", True),
+            ),
+        )
+    return regr_fig
+
+
 def plot_regr(
     regr_dict,
     color_column=None,
@@ -129,6 +269,7 @@ def plot_regr(
     which_error="mean",
     color_mapping=None,
     regr_layout=None,
+    axes_layout={},
     text_column=None,
     *args,
     **kwargs,
@@ -218,76 +359,7 @@ def plot_regr(
         regr_fig = go.Figure()
 
         # Add annotation with R^2 and RMSEs
-        # TODO: Implement this better
-
-        if which_error != "all":
-            if which_error == "mean":
-                error_list = [
-                    np.mean(error_dict["rsquared_tests"]),
-                    np.std(error_dict["rsquared_tests"]),
-                    np.mean(error_dict["rmse_tests"]),
-                    np.std(error_dict["rmse_tests"]),
-                    np.mean(error_dict["mae_tests"]),
-                    np.std(error_dict["mae_tests"]),
-                ]
-            elif which_error == "best":
-                error_list = [
-                    np.max(error_dict["rsquared_tests"]),
-                    np.std(error_dict["rsquared_tests"]),
-                    np.min(error_dict["rmse_tests"]),
-                    np.std(error_dict["rmse_tests"]),
-                    np.min(error_dict["mae_tests"]),
-                    np.std(error_dict["mae_tests"]),
-                ]
-            elif which_error == "full_mean":
-                error_list = [
-                    np.mean(error_dict["rsquared_fulls"]),
-                    np.std(error_dict["rsquared_fulls"]),
-                    np.mean(error_dict["rmse_fulls"]),
-                    np.std(error_dict["rmse_fulls"]),
-                    np.mean(error_dict["mae_fulls"]),
-                    np.std(error_dict["mae_fulls"]),
-                ]
-            elif which_error == "full_best":
-                error_list = [
-                    np.max(error_dict["rsquared_fulls"]),
-                    np.std(error_dict["rsquared_fulls"]),
-                    np.min(error_dict["rmse_fulls"]),
-                    np.std(error_dict["rmse_fulls"]),
-                    np.min(error_dict["mae_fulls"]),
-                    np.std(error_dict["mae_fulls"]),
-                ]
-            else:
-                raise KeyError("Invalid error specification used.")
-
-            error_text = "R<sup>2</sup> = {:.3f} &#177; {:.3f}<br>RMSE = {:.3f} &#177; {:.3f}<br>MAE = {:.3f} &#177; {:.3f}".format(
-                *error_list
-            )
-        # ! Change decimal to 3
-        else:
-            error_list_train = [
-                np.mean(error_dict["rsquared_trains"]),
-                np.std(error_dict["rsquared_trains"]),
-                np.mean(error_dict["rmse_trains"]),
-                np.std(error_dict["rmse_trains"]),
-                np.mean(error_dict["mae_trains"]),
-                np.std(error_dict["mae_trains"]),
-            ]
-            error_text = "Train:<br>R<sup>2</sup> = {:.2f} &#177; {:.2f}<br>RMSE = {:.2f} &#177; {:.2f}<br>MAE = {:.2f} &#177; {:.2f}".format(
-                *error_list_train
-            )
-            error_list_test = [
-                np.mean(error_dict["rsquared_tests"]),
-                np.std(error_dict["rsquared_tests"]),
-                np.mean(error_dict["rmse_tests"]),
-                np.std(error_dict["rmse_tests"]),
-                np.mean(error_dict["mae_tests"]),
-                np.std(error_dict["mae_tests"]),
-            ]
-
-            error_text += "<br>Test:<br>R<sup>2</sup> = {:.2f} &#177; {:.2f}<br>RMSE = {:.2f} &#177; {:.2f}<br>MAE = {:.2f} &#177; {:.2f}".format(
-                *error_list_test
-            )
+        error_text = create_error_text(error_dict=error_dict, which_error=which_error)
 
         _ = regr_fig.add_annotation(
             xanchor="left",
@@ -304,91 +376,49 @@ def plot_regr(
             bgcolor="rgba(0,0,0,0.1)",
         )
 
+        # Assign lowest-cardinality df column to color_column and symbol_column
+        # if they are not set
+        if color_column is None:
+            color_column = get_df_cardinality_col(df_in=df_func)
+
+        if symbol_column is None:
+            symbol_column = get_df_cardinality_col(df_in=df_func)
+
         # Plot energy data points
         # ! Difference between train and test via marker symbol
         # ! Different colors based on a column
 
         # print("color_column", color_column)
+
         if show_train is True:
-            for column_value in df_train[color_column].unique():
-                column_train_df = df_train.loc[df_train[color_column] == column_value]
-                if text_column is not None:
-                    plot_text = column_train_df[text_column]
-                else:
-                    plot_text = [""] * column_train_df.shape[0]
-
-                train_symbols = [
-                    symbol_mapping.get(_, "star")
-                    for _ in column_train_df[symbol_column].values
-                ]
-
-                _ = regr_fig.add_trace(
-                    go.Scatter(
-                        x=column_train_df["y"],
-                        y=column_train_df[cv_id_pred_column],
-                        mode="markers",
-                        marker=dict(
-                            size=12,
-                            symbol=train_symbols,
-                            opacity=1,
-                            # color='rgba(255, 255, 255, 0.5)',
-                            color=color_mapping.get(column_value, "black"),
-                            line=dict(
-                                color="black",
-                                # color=color_mapping.get(column_value, "black"),  # Rigid black color for the  perimeter
-                                width=2,
-                            ),  # Adjust the width of the  perimeter
-                        ),
-                        hoverinfo="text+x+y",
-                        name="{}".format(column_value),
-                        # name=kwargs.get("legendgroup", f"{column_value}"),
-                        text=plot_text,
-                        legendgroup="{}".format(column_value),
-                        # legendgroup=kwargs.get("legendgroup", f"{column_value}"),
-                        showlegend=kwargs.get("show_train_legend", True),
-                    ),
-                )
+            regr_fig = _add_train_test_trace(
+                df_in=df_train,
+                regr_fig=regr_fig,
+                color_column=color_column,
+                symbol_column=symbol_column,
+                symbol_mapping=symbol_mapping,
+                color_mapping=color_mapping,
+                text_column=text_column,
+                cv_id_pred_column=cv_id_pred_column,
+                which_trace="train",
+                kwargs=kwargs,
+            )
 
         if show_test is True:
-            for column_value in df_test[color_column].unique():
-                column_test_df = df_test.loc[df_test[color_column] == column_value]
-                if text_column is not None:
-                    plot_text = column_test_df[text_column]
-                else:
-                    plot_text = [""] * column_test_df.shape[0]
+            regr_fig = _add_train_test_trace(
+                df_in=df_test,
+                regr_fig=regr_fig,
+                color_column=color_column,
+                symbol_column=symbol_column,
+                symbol_mapping=symbol_mapping,
+                color_mapping=color_mapping,
+                text_column=text_column,
+                cv_id_pred_column=cv_id_pred_column,
+                which_trace="test",
+                kwargs=kwargs,
+            )
 
-                test_symbols = [
-                    symbol_mapping.get(_, "star")
-                    for _ in column_test_df[symbol_column].values
-                ]
-
-                _ = regr_fig.add_trace(
-                    go.Scatter(
-                        x=column_test_df["y"],
-                        y=column_test_df[cv_id_pred_column],
-                        mode="markers",
-                        marker=dict(
-                            size=12,
-                            symbol=test_symbols,
-                            opacity=1,
-                            # color='rgba(255, 255, 255, 0.5)',
-                            color=color_mapping.get(column_value, "black"),
-                            line=dict(
-                                color="black",
-                                # color=color_mapping.get(column_value, "black"),  # Rigid black color for the perimeter
-                                width=2,
-                            ),  # Adjust the width of the perimeter
-                        ),
-                        hoverinfo="text+x+y",
-                        name="{}".format(column_value),
-                        # name=kwargs.get("legendgroup", f"{column_value}"),
-                        text=plot_text,
-                        legendgroup="{}".format(column_value),
-                        # legendgroup=kwargs.get("legendgroup", f"{column_value}"),
-                        showlegend=kwargs.get("show_test_legend", True),
-                    ),
-                )
-
+        # todo: Move this out to separate function
         if set_range is None:
             all_values = (
                 df_train["y"].tolist()
@@ -419,15 +449,17 @@ def plot_regr(
         )
 
         # Update global layout
-
         if regr_layout is not None:
             _ = regr_fig.update_layout(regr_layout)
 
-        axes_layout = go.Layout(
-            xaxis=dict(range=range_ext), yaxis=dict(range=range_ext)
+        _axes_layout = go.Layout(
+            {
+                **axes_layout,
+                **{"xaxis_range": range_ext, "yaxis_range": range_ext},
+            }
         )
 
-        _ = regr_fig.update_layout(axes_layout)
+        _ = regr_fig.update_layout(_axes_layout)
 
         regr_figs.append(regr_fig)
 
