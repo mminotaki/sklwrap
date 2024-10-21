@@ -790,7 +790,9 @@ def plot_errors(
 
         _ = error_fig.add_trace(
             go.Scatter(
-                x=list(x_values.astype(float).round(2)),
+                # Change x into an array
+                x=np.array(x_values).astype(float).round(2),
+                # x=list(x_values.astype(float).round(2)),
                 # y=error_dict[
                 #     plot_measure
                 # ],
@@ -819,8 +821,10 @@ def plot_errors(
         if iplot_measure == len(plot_measures) - 1:
             _ = error_fig.add_trace(
                 go.Scatter(
+                    # Change x into an array
+                    x=np.array(x_values).astype(float).round(2),
                     # x=list(range(1, error_array.shape[0])),
-                    x=list(x_values.astype(float).round(2)),
+                    # x=list(x_values.astype(float).round(2)),
                     y=error_dict[plot_measure],
                     mode="lines",
                     name="RMSE (train)",
